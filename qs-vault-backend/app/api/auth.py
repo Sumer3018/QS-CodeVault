@@ -1,34 +1,49 @@
-from fastapi import APIRouter, HTTPException
-from app.core.security import hash_password, verify_password
-from app.core.jwt import create_access_token
-from app.models.user import User
-import uuid
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from datetime import timedelta
+from app.core.database import get_db
+from app.core.security import verify_password, get_password_hash, create_access_token, get_current_user
+from app.models.domain import User
+from app.core.config import settings
+from pydantic import BaseModel
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter()
 
-USERS_DB = {}
-
+# Schema for Registration
+class UserCreate(BaseModel):
+    username: str
+    password: str
 
 @router.post("/register")
-def register(username: str, password: str):
-    if username in USERS_DB:
-        raise HTTPException(status_code=400, detail="User exists")
-
-    user = User(
-        user_id=str(uuid.uuid4()),
-        username=username,
-        hashed_password=hash_password(password)
-    )
-
-    USERS_DB[username] = user
-    return {"message": "registered"}
-
+def register(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    hashed_password = get_password_hash(user.password)
+    new_user = User(username=user.username, hashed_password=hashed_password)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "User created successfully"}
 
 @router.post("/login")
-def login(username: str, password: str):
-    user = USERS_DB.get(username)
-    if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
-    token = create_access_token(user.user_id)
-    return {"access_token": token, "token_type": "bearer"}
+@router.get("/me")
+def read_users_me(current_user: User = Depends(get_current_user)):
+    return {"username": current_user.username, "id": current_user.id}

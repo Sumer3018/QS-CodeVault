@@ -1,18 +1,11 @@
-fastapi
-uvicorn
-
-cryptography
-pqcrypto
-pyoqs
-
-python-jose
-passlib[bcrypt]
-
-pydantic
-python-multipart
-
-minio
-python-dotenv
-
-psutil
-rich
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.6.0
+pydantic-settings==2.1.0
+python-multipart==0.0.9
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+pycryptodome==3.20.0     # For AES-GCM and HKDF
+pqcrypto==0.4.0          # For CRYSTALS-Kyber (ML-KEM)
+aiofiles==23.2.1         # For async file I/O
+python-dotenv==1.0.1

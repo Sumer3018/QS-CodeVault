@@ -1,32 +1,39 @@
-from dotenv import load_dotenv
 import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-load_dotenv()
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "QS-Vault: Hybrid PQC Gateway"
+    API_V1_STR: str = "/api/v1"
+    
+    # Security Parameters
+    # We map these to standard names. If your .env uses 'jwt_secret_key', 
+    # Pydantic will now ignore it unless we rename this to match, 
+    # but we will stick to standard naming and ignore the extras.
+    SECRET_KEY: str = "unsafe_dev_secret_key_change_in_production"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
+    # Cryptographic Configuration
+    PQC_ALGORITHM: str = "ML-KEM-512"
+    SYMMETRIC_ALGORITHM: str = "AES-256-GCM"
+    KDF_ALGORITHM: str = "HKDF-SHA256"
+    
+    # Storage Configuration
+    UPLOAD_DIR: str = os.path.join(os.getcwd(), "uploads")
+    STORAGE_BACKEND: str = "local" # Options: 'local', 'minio'
 
+    # MinIO Configuration (Added to prevent errors if you want to use them later)
+    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET: str = "qs-vault"
 
-class Settings:
-    PROJECT_NAME = "QS-Vault"
-    VERSION = "1.0"
-
-    # JWT
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-    JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(
-        os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
-
-    # Storage
-    STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local")
-    STORAGE_PATH = os.getenv("STORAGE_PATH", "./storage")
-
-    # MinIO
-    MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
-    MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
-    MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
-    MINIO_BUCKET = os.getenv("MINIO_BUCKET")
-
-    # Policy
-    ALLOW_MACRO_FILES = os.getenv(
-        "ALLOW_MACRO_FILES", "true").lower() == "true"
-
+    # Pydantic v2 Configuration
+    # extra="ignore" tells Pydantic: "If you see 'jwt_secret_key' in .env 
+    # but it's not in this class, just ignore it, don't crash."
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
+
+# Ensure upload directory exists
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
