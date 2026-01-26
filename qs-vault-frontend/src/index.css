@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global Dark Theme overrides */
+body {
+  background-color: #050505;
+  color: #e2e8f0;
+  margin: 0;
+  font-family: 'Courier New', monospace; /* Fallback for Sci-Fi feel */
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #050505; 
+}
+::-webkit-scrollbar-thumb {
+  background: #1f1f2e; 
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00ff9d; 
+}

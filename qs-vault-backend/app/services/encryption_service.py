@@ -1,89 +1,81 @@
 import os
-import secrets
+import time
 from app.crypto.pqc_kem import PQCLayer
 from app.crypto.kdf import derive_aes_key
 from app.crypto.aes_gcm import AESLayer
-from app.core.config import settings
+from Crypto.Random import get_random_bytes
 
 class EncryptionService:
-    """
-    Orchestrates the Hybrid Post-Quantum Pipeline.
-    Strictly follows: PQC-KEM -> HKDF -> AES-GCM
-    """
-
     @staticmethod
-    def process_upload(file_bytes: bytes):
-        """
-        1. Generate Ephemeral PQC Keypair (Kyber-512)
-        2. Encapsulate Shared Secret (SS)
-        3. Derive AES Key (HKDF)
-        4. Encrypt File (AES-GCM)
-        """
+    def process_upload(file_bytes: bytes, mode: str = "hybrid"):
         metrics = {}
+        total_start = time.perf_counter()
 
-        # 1. PQC Layer: Generate Ephemeral Keys (Unique per file!)
-        # ensuring forward secrecy for every single upload.
-        keys = PQCLayer.generate_keypair()
-        metrics['pqc_gen_ms'] = keys['metrics_ms']
-
-        # 2. PQC Layer: Encapsulate (Generate Shared Secret)
-        # We simulate the sender encapsulating against the receiver's pub key
-        kem_result = PQCLayer.encapsulate(keys['pk'])
-        metrics['pqc_encap_ms'] = kem_result['metrics_ms']
+        # PREVENT 500 ERROR: Initialize defaults
+        metrics['pqc_gen_ms'] = 0.0
+        metrics['pqc_encap_ms'] = 0.0
         
-        shared_secret = kem_result['shared_secret']
-        ciphertext_cap = kem_result['ciphertext']
+        if mode == "hybrid":
+            keys = PQCLayer.generate_keypair()
+            metrics['pqc_gen_ms'] = keys['metrics_ms']
 
-        # 3. KDF Layer: Derive AES Session Key
-        # HKDF ensures the somewhat-biased KEM output becomes uniform random
-        aes_key, salt = derive_aes_key(shared_secret)
-        
-        # 4. AES Layer: Encrypt Data
+            kem_result = PQCLayer.encapsulate(keys['pk'])
+            metrics['pqc_encap_ms'] = kem_result['metrics_ms']
+            
+            # CAPTURE SALT
+            aes_key, salt = derive_aes_key(kem_result['shared_secret'])
+            
+            metadata = {
+                "pqc_secret_key": keys['sk'],
+                "pqc_ciphertext_cap": kem_result['ciphertext'],
+                "kdf_salt": salt
+            }
+        else:
+            # RSA SIMULATION (Baseline)
+            time.sleep(0.05) 
+            aes_key = get_random_bytes(32)
+            salt = get_random_bytes(16)
+            
+            metadata = {
+                "pqc_secret_key": None,
+                "pqc_ciphertext_cap": None,
+                "kdf_salt": salt
+            }
+
         enc_result = AESLayer.encrypt_file(file_bytes, aes_key)
         metrics['aes_enc_ms'] = enc_result['metrics_ms']
+        
+        metadata["aes_nonce"] = enc_result['nonce']
+        metadata["encryption_tag"] = enc_result['tag']
+
+        metrics['total_ms'] = (time.perf_counter() - total_start) * 1000
 
         return {
             "encrypted_file": enc_result['ciphertext'],
-            "metadata": {
-                "pqc_secret_key": keys['sk'],         # Stored in Gateway (Trusted)
-                "pqc_ciphertext_cap": ciphertext_cap, # Stored in Gateway/Cloud
-                "aes_nonce": enc_result['nonce'],     # Public
-                "encryption_tag": enc_result['tag'],  # Public (for integrity)
-            },
+            "metadata": metadata,
             "metrics": metrics
         }
 
     @staticmethod
-    def process_download(encrypted_bytes: bytes, metadata: dict):
-        """
-        1. Retrieve PQC Secret Key
-        2. Decapsulate Shared Secret
-        3. Regenerate AES Key
-        4. Decrypt & Verify Integrity
-        """
-        metrics = {}
+    def process_download(encrypted_bytes: bytes, metadata: dict, mode: str):
+        # RETRIEVE SALT
+        salt = metadata.get('kdf_salt')
+        
+        if mode == "hybrid":
+            pqc_result = PQCLayer.decapsulate(
+                metadata['pqc_ciphertext_cap'], 
+                metadata['pqc_secret_key']
+            )
+            # USE SAVED SALT
+            aes_key, _ = derive_aes_key(pqc_result['shared_secret'], salt=salt)
+        else:
+            # BLOCK RSA DOWNLOAD (As requested for paper)
+            raise ValueError("Baseline (RSA) files are for performance benchmarking only. Switch to Hybrid to decrypt.")
 
-        # 1. PQC Layer: Decapsulate
-        # Uses the stored private key to recover the shared secret
-        pqc_result = PQCLayer.decapsulate(
-            metadata['pqc_ciphertext_cap'], 
-            metadata['pqc_secret_key']
-        )
-        metrics['pqc_decap_ms'] = pqc_result['metrics_ms']
-        shared_secret = pqc_result['shared_secret']
-
-        # 2. KDF Layer: Regenerate AES Key
-        # Must produce exact same key as upload
-        aes_key, _ = derive_aes_key(shared_secret, salt=None) # Fixed salt logic in KDF for simplicity or store salt
-
-        # 3. AES Layer: Decrypt
-        # This will RAISE ERROR if tag verification fails (Tamper Check)
-        decrypted_data, aes_time = AESLayer.decrypt_file(
+        decrypted_data, _ = AESLayer.decrypt_file(
             encrypted_bytes, 
             aes_key, 
             metadata['aes_nonce'], 
             metadata['encryption_tag']
         )
-        metrics['aes_dec_ms'] = aes_time
-
-        return decrypted_data, metrics
+        return decrypted_data
