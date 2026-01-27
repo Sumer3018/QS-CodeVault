@@ -4,6 +4,7 @@ from datetime import datetime
 
 Base = declarative_base()
 
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -12,24 +13,23 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     files = relationship("FileMetadata", back_populates="owner")
 
+
 class FileMetadata(Base):
     __tablename__ = "files"
-    
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     filename = Column(String, nullable=False)
     filesize = Column(Integer, nullable=False)
     upload_date = Column(DateTime, default=datetime.utcnow)
     cloud_path = Column(String, unique=True, nullable=False)
-    
     algo_mode = Column(String, default="hybrid")
-    
+
     # Crypto Fields
-    pqc_secret_key = Column(LargeBinary, nullable=True) 
+    pqc_secret_key = Column(LargeBinary, nullable=True)
     pqc_ciphertext_cap = Column(LargeBinary, nullable=True)
     aes_nonce = Column(LargeBinary, nullable=False)
     encryption_tag = Column(LargeBinary, nullable=False)
-    kdf_salt = Column(LargeBinary, nullable=False) 
+    kdf_salt = Column(LargeBinary, nullable=False)  # CRITICAL MISSING PIECE
 
     # Metrics
     time_pqc = Column(Float, default=0.0)

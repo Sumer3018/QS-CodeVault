@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { uploadFile, getFiles, downloadFile, deleteFile } from '../services/api';
 import CryptoFlow from '../components/CryptoFlow';
-import { Upload, Download, FileText, AlertTriangle, Server, HardDrive, Terminal, Trash2, Activity, Play, X, RefreshCw } from 'lucide-react';
+import SciFiAlert from '../components/SciFiAlert';
+import { Upload, Server, HardDrive, Terminal, Activity, Play, X, RefreshCw, FileCheck, FileText, Trash2 } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 
@@ -11,12 +12,10 @@ const Dashboard = () => {
   const [files, setFiles] = useState([]);
   const [fileToUpload, setFileToUpload] = useState(null);
   const [uploadStep, setUploadStep] = useState(0); 
-  const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]); 
   const [selectedFile, setSelectedFile] = useState(null); 
-  const [showDeleteModal, setShowDeleteModal] = useState(null);
   const [successMode, setSuccessMode] = useState(false);
-  const [storageMode, setStorageMode] = useState('local');
+  const [customAlert, setCustomAlert] = useState(null);
   const [cryptoMode, setCryptoMode] = useState('hybrid'); 
 
   useEffect(() => { fetchFiles(); }, []);
@@ -34,14 +33,12 @@ const Dashboard = () => {
       setFileToUpload(null);
       setSuccessMode(false);
       setUploadStep(0);
-      setError(null);
   };
 
   const onFileDrop = (e) => {
       const file = e.target.files[0];
       if (file) {
           setFileToUpload(file);
-          setError(null);
           setSuccessMode(false);
           addLog(`STAGE: ${file.name} loaded.`);
       }
@@ -52,16 +49,14 @@ const Dashboard = () => {
     setUploadStep(1);
     setLogs([]); 
     addLog(`INIT: Protocol for ${fileToUpload.name}`);
-    addLog(`MODE: ${cryptoMode.toUpperCase()}`);
-
-    // Animation
+    
+    // Animation Logic
     if (cryptoMode === 'hybrid') {
-        setTimeout(() => { setUploadStep(2); addLog("PQC: Generating Kyber-512 Keys..."); }, 800);
+        setTimeout(() => { setUploadStep(2); addLog("PQC: Generating Kyber Keys..."); }, 800);
         setTimeout(() => { setUploadStep(3); addLog("PQC: Encapsulating Secret..."); }, 2000);
     } else {
         setTimeout(() => { addLog("RSA: Generating Baseline Keys..."); }, 800);
     }
-    
     setTimeout(() => { setUploadStep(4); addLog("KDF: Deriving Session Key..."); }, 3000);
 
     try {
@@ -70,12 +65,11 @@ const Dashboard = () => {
       setTimeout(() => {
         setUploadStep(5);
         addLog("AES: Encrypting Payload...");
-        addLog("NET: Uploading Blob...");
       }, 4000);
       
+      // FINISH: Bar stays visible, success message shows below
       setTimeout(() => {
-        setUploadStep(0);
-        setSuccessMode(true);
+        setSuccessMode(true); 
         addLog(`SUCCESS: Sealed ID: ${res.data.file_id}`);
         fetchFiles();
       }, 5500);
@@ -83,13 +77,13 @@ const Dashboard = () => {
     } catch (err) {
       setUploadStep(0);
       addLog("ERROR: Protocol Failed.");
-      setError("Upload Failed. Check backend logs.");
+      setCustomAlert({ type: 'error', title: 'Upload Failed', message: 'Check backend connection or database.' });
     }
   };
 
   const handleDownload = async (file) => {
     if (file.mode !== 'hybrid') {
-        setError("BASELINE: RSA files are benchmark only.");
+        setCustomAlert({ type: 'error', title: 'Action Denied', message: 'RSA Baseline files are for benchmarking only.' });
         return;
     }
     try {
@@ -98,50 +92,51 @@ const Dashboard = () => {
       addLog("SUCCESS: Decrypted.");
     } catch (err) {
       addLog("❌ FAILURE: Integrity Check Failed.");
-      setError("CRITICAL: Ciphertext Tag Mismatch.");
+      setCustomAlert({ 
+          type: 'error', 
+          title: 'Integrity Violation', 
+          message: 'CRITICAL: The file signature does not match. Download aborted.' 
+      });
     }
   };
 
-  const confirmDelete = async () => {
-      if (!showDeleteModal) return;
-      await deleteFile(showDeleteModal);
-      fetchFiles();
-      setShowDeleteModal(null);
-      setSelectedFile(null);
+  const initiateDelete = (id) => {
+      setCustomAlert({
+          type: 'danger',
+          title: 'Confirm Deletion',
+          message: 'Permanently destroy this encrypted object?',
+          onConfirm: async () => {
+              await deleteFile(id);
+              fetchFiles();
+              setCustomAlert(null);
+              setSelectedFile(null);
+          },
+          onClose: () => setCustomAlert(null)
+      });
   };
 
   return (
     <div className="p-8 space-y-6 relative h-full flex flex-col">
-      {/* CENTRAL MODAL RESTORED */}
+      {customAlert && <SciFiAlert {...customAlert} onClose={() => setCustomAlert(null)} />}
+
       {selectedFile && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 backdrop-blur-md">
-            <div className="bg-scifi-panel border border-neon-blue w-[600px] p-8 rounded-2xl shadow-[0_0_50px_rgba(0,243,255,0.2)] relative">
+            <div className="bg-scifi-panel border border-neon-blue w-[600px] p-8 rounded-2xl relative">
                 <button onClick={() => setSelectedFile(null)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X /></button>
                 <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3"><Activity className="text-neon-blue" /> File Security Report</h2>
-                
-                <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-                    <div><span className="text-gray-500">File:</span> <span className="text-white font-mono">{selectedFile.filename}</span></div>
-                    <div><span className="text-gray-500">Mode:</span> <span className="text-neon-green font-bold uppercase">{selectedFile.mode}</span></div>
-                </div>
-
                 <div className="bg-black/50 p-4 rounded-xl border border-gray-800 mb-6 h-48">
                      <Bar data={{
                             labels: ['PQC/Key', 'AES', 'Total'],
                             datasets: [{
-                                label: 'Time (ms)',
+                                label: 'Latency (ms)',
                                 data: [selectedFile.metrics.pqc, selectedFile.metrics.aes, selectedFile.metrics.total],
                                 backgroundColor: ['#00ff9d', '#00f3ff', '#ffffff'],
                             }]
-                        }} 
-                        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} 
-                    />
+                        }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
                 </div>
-
                 <div className="flex justify-end gap-3">
-                    <button onClick={() => { setShowDeleteModal(selectedFile.id); setSelectedFile(null); }} className="px-4 py-2 border border-red-500 text-red-500 rounded">Delete</button>
-                    {selectedFile.mode === 'hybrid' && (
-                        <button onClick={() => { handleDownload(selectedFile); setSelectedFile(null); }} className="px-4 py-2 bg-neon-blue text-black font-bold rounded">Decrypt & Download</button>
-                    )}
+                    <button onClick={() => { setSelectedFile(null); initiateDelete(selectedFile.id); }} className="px-4 py-2 border border-red-500 text-red-500 rounded">Delete</button>
+                    <button onClick={() => handleDownload(selectedFile)} className="px-4 py-2 bg-neon-blue text-black font-bold rounded">Decrypt & Download</button>
                 </div>
             </div>
         </div>
@@ -159,30 +154,37 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {error && <div className="bg-red-900/20 border border-red-500 p-3 rounded text-red-400 text-sm">{error}</div>}
-
       <div className="grid grid-cols-3 gap-6 flex-1 min-h-0">
         <div className="col-span-2 flex flex-col gap-6">
             <div className="bg-scifi-panel border border-scifi-border rounded-xl p-6 relative overflow-hidden min-h-[300px] flex flex-col justify-center">
-                {uploadStep > 0 ? (
-                    <div className="text-center">
-                        <h3 className="text-neon-green font-bold mb-8 animate-pulse">ENCRYPTION RUNNING...</h3>
-                        <CryptoFlow currentStep={uploadStep} mode={cryptoMode} />
+                
+                {/* STATE 1: RUNNING OR SUCCESS */}
+                {uploadStep > 0 || successMode ? (
+                    <div className="text-center w-full">
+                        <h3 className="text-neon-green font-bold mb-8 animate-pulse">
+                            {successMode ? "ENCRYPTION COMPLETE" : "ENCRYPTION RUNNING..."}
+                        </h3>
+                        <CryptoFlow currentStep={uploadStep === 0 ? 5 : uploadStep} mode={cryptoMode} />
+                        {successMode && (
+                            <div className="mt-8 bg-neon-green/5 border border-neon-green/30 p-4 rounded-lg animate-in slide-in-from-bottom-4 fade-in duration-500">
+                                <div className="flex items-center justify-center gap-3 mb-2">
+                                    <FileCheck className="text-neon-green" size={24} />
+                                    <span className="text-white font-bold text-lg">File Sealed & Stored</span>
+                                </div>
+                                <button onClick={resetUpload} className="mt-2 px-6 py-2 bg-white text-black font-bold rounded hover:bg-neon-green transition flex items-center gap-2 mx-auto text-sm">
+                                    <RefreshCw size={14} /> Encrypt Another File
+                                </button>
+                            </div>
+                        )}
                     </div>
-                ) : successMode ? (
-                    <div className="text-center">
-                        <Activity className="mx-auto text-neon-green mb-4" size={48} />
-                        <h4 className="text-white font-bold text-xl mb-2">File Sealed</h4>
-                        <button onClick={resetUpload} className="mt-6 px-6 py-2 bg-white text-black font-bold rounded flex items-center gap-2 mx-auto hover:bg-neon-green transition">
-                            <RefreshCw size={16} /> Encrypt Another
-                        </button>
-                    </div>
+                /* STATE 2: DROPZONE */
                 ) : !fileToUpload ? (
                      <label className="border-2 border-dashed border-gray-700 rounded-lg h-full flex flex-col items-center justify-center cursor-pointer hover:border-neon-green/50 hover:bg-white/5 transition-all">
                         <input type="file" onChange={onFileDrop} className="hidden" />
                         <Upload className="text-gray-500 mb-4" size={40} />
                         <p className="text-white font-bold text-lg">Drop files to Stage</p>
                     </label>
+                /* STATE 3: READY */
                 ) : (
                     <div className="text-center">
                         <FileText className="mx-auto text-neon-green mb-4" size={48} />
@@ -196,6 +198,8 @@ const Dashboard = () => {
                     </div>
                 )}
             </div>
+            
+            {/* LOGS */}
             <div className="bg-black border border-gray-800 rounded-xl p-4 flex-1 overflow-hidden flex flex-col">
                 <div className="text-gray-500 text-xs border-b border-gray-800 pb-2 mb-2 flex items-center gap-2"><Terminal size={12} /> CRYPTO_KERNEL_LOGS</div>
                 <div className="overflow-y-auto custom-scrollbar flex-1">
@@ -203,6 +207,7 @@ const Dashboard = () => {
                 </div>
             </div>
         </div>
+
         <div className="col-span-1 bg-scifi-panel border border-scifi-border rounded-xl p-4 flex flex-col">
              <h3 className="text-white font-bold text-sm mb-4 flex items-center gap-2"><Server size={16} className="text-neon-blue"/> Vault Contents</h3>
              <div className="overflow-y-auto custom-scrollbar flex-1 space-y-2">
