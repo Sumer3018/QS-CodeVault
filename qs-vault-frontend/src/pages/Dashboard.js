@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { uploadFile, getFiles, downloadFile, deleteFile } from '../services/api';
 import CryptoFlow from '../components/CryptoFlow';
 import SciFiAlert from '../components/SciFiAlert';
-import { Upload, Server, HardDrive, Terminal, Activity, Play, X, RefreshCw, FileCheck, FileText, Trash2 } from 'lucide-react';
+import { Upload, Server, HardDrive, Terminal, Activity, Play, X, RefreshCw, FileCheck, FileText } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 
@@ -50,40 +50,28 @@ const Dashboard = () => {
     setLogs([]); 
     addLog(`INIT: Protocol for ${fileToUpload.name}`);
     
-    // Animation Logic
     if (cryptoMode === 'hybrid') {
-        setTimeout(() => { setUploadStep(2); addLog("PQC: Generating Kyber Keys..."); }, 800);
-        setTimeout(() => { setUploadStep(3); addLog("PQC: Encapsulating Secret..."); }, 2000);
+        setTimeout(() => { setUploadStep(2); addLog("PQC: Generating Keys..."); }, 800);
+        setTimeout(() => { setUploadStep(3); addLog("PQC: Encapsulating..."); }, 2000);
     } else {
-        setTimeout(() => { addLog("RSA: Generating Baseline Keys..."); }, 800);
+        setTimeout(() => { addLog("RSA: Generating Keys..."); }, 800);
     }
-    setTimeout(() => { setUploadStep(4); addLog("KDF: Deriving Session Key..."); }, 3000);
+    setTimeout(() => { setUploadStep(4); addLog("KDF: Deriving Key..."); }, 3000);
 
     try {
       const res = await uploadFile(fileToUpload, cryptoMode); 
-      
-      setTimeout(() => {
-        setUploadStep(5);
-        addLog("AES: Encrypting Payload...");
-      }, 4000);
-      
-      // FINISH: Bar stays visible, success message shows below
-      setTimeout(() => {
-        setSuccessMode(true); 
-        addLog(`SUCCESS: Sealed ID: ${res.data.file_id}`);
-        fetchFiles();
-      }, 5500);
-
+      setTimeout(() => { setUploadStep(5); addLog("AES: Encrypting..."); }, 4000);
+      setTimeout(() => { setSuccessMode(true); addLog(`SUCCESS: Sealed ID: ${res.data.file_id}`); fetchFiles(); }, 5500);
     } catch (err) {
       setUploadStep(0);
-      addLog("ERROR: Protocol Failed.");
-      setCustomAlert({ type: 'error', title: 'Upload Failed', message: 'Check backend connection or database.' });
+      addLog("ERROR: Failed.");
+      setCustomAlert({ type: 'error', title: 'Upload Failed', message: 'Server error. Check backend logs.' });
     }
   };
 
   const handleDownload = async (file) => {
     if (file.mode !== 'hybrid') {
-        setCustomAlert({ type: 'error', title: 'Action Denied', message: 'RSA Baseline files are for benchmarking only.' });
+        setCustomAlert({ type: 'error', title: 'Action Denied', message: 'RSA is for benchmarking only.' });
         return;
     }
     try {
@@ -92,33 +80,15 @@ const Dashboard = () => {
       addLog("SUCCESS: Decrypted.");
     } catch (err) {
       addLog("❌ FAILURE: Integrity Check Failed.");
-      setCustomAlert({ 
-          type: 'error', 
-          title: 'Integrity Violation', 
-          message: 'CRITICAL: The file signature does not match. Download aborted.' 
-      });
+      setCustomAlert({ type: 'error', title: 'Integrity Breach', message: 'File signature mismatch. Download aborted.' });
     }
-  };
-
-  const initiateDelete = (id) => {
-      setCustomAlert({
-          type: 'danger',
-          title: 'Confirm Deletion',
-          message: 'Permanently destroy this encrypted object?',
-          onConfirm: async () => {
-              await deleteFile(id);
-              fetchFiles();
-              setCustomAlert(null);
-              setSelectedFile(null);
-          },
-          onClose: () => setCustomAlert(null)
-      });
   };
 
   return (
     <div className="p-8 space-y-6 relative h-full flex flex-col">
       {customAlert && <SciFiAlert {...customAlert} onClose={() => setCustomAlert(null)} />}
-
+      
+      {/* Report Modal */}
       {selectedFile && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 backdrop-blur-md">
             <div className="bg-scifi-panel border border-neon-blue w-[600px] p-8 rounded-2xl relative">
@@ -135,8 +105,8 @@ const Dashboard = () => {
                         }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
                 </div>
                 <div className="flex justify-end gap-3">
-                    <button onClick={() => { setSelectedFile(null); initiateDelete(selectedFile.id); }} className="px-4 py-2 border border-red-500 text-red-500 rounded">Delete</button>
-                    <button onClick={() => handleDownload(selectedFile)} className="px-4 py-2 bg-neon-blue text-black font-bold rounded">Decrypt & Download</button>
+                    <button onClick={() => { deleteFile(selectedFile.id); setSelectedFile(null); fetchFiles(); }} className="px-4 py-2 border border-red-500 text-red-500 rounded">Delete</button>
+                    <button onClick={() => handleDownload(selectedFile)} className="px-4 py-2 bg-neon-blue text-black font-bold rounded">Decrypt</button>
                 </div>
             </div>
         </div>
@@ -155,45 +125,34 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-3 gap-6 flex-1 min-h-0">
+        
+        {/* LEFT: UPLOAD */}
         <div className="col-span-2 flex flex-col gap-6">
             <div className="bg-scifi-panel border border-scifi-border rounded-xl p-6 relative overflow-hidden min-h-[300px] flex flex-col justify-center">
-                
-                {/* STATE 1: RUNNING OR SUCCESS */}
                 {uploadStep > 0 || successMode ? (
                     <div className="text-center w-full">
-                        <h3 className="text-neon-green font-bold mb-8 animate-pulse">
-                            {successMode ? "ENCRYPTION COMPLETE" : "ENCRYPTION RUNNING..."}
-                        </h3>
+                        <h3 className="text-neon-green font-bold mb-8 animate-pulse">{successMode ? "ENCRYPTION COMPLETE" : "ENCRYPTION RUNNING..."}</h3>
                         <CryptoFlow currentStep={uploadStep === 0 ? 5 : uploadStep} mode={cryptoMode} />
                         {successMode && (
-                            <div className="mt-8 bg-neon-green/5 border border-neon-green/30 p-4 rounded-lg animate-in slide-in-from-bottom-4 fade-in duration-500">
-                                <div className="flex items-center justify-center gap-3 mb-2">
-                                    <FileCheck className="text-neon-green" size={24} />
-                                    <span className="text-white font-bold text-lg">File Sealed & Stored</span>
-                                </div>
-                                <button onClick={resetUpload} className="mt-2 px-6 py-2 bg-white text-black font-bold rounded hover:bg-neon-green transition flex items-center gap-2 mx-auto text-sm">
-                                    <RefreshCw size={14} /> Encrypt Another File
-                                </button>
+                            <div className="mt-8 bg-neon-green/5 border border-neon-green/30 p-4 rounded-lg animate-in slide-in-from-bottom-4">
+                                <div className="flex items-center justify-center gap-3 mb-2"><FileCheck className="text-neon-green" size={24} /><span className="text-white font-bold text-lg">Sealed & Stored</span></div>
+                                <button onClick={resetUpload} className="mt-2 px-6 py-2 bg-white text-black font-bold rounded hover:bg-neon-green transition flex items-center gap-2 mx-auto text-sm"><RefreshCw size={14} /> Encrypt Another</button>
                             </div>
                         )}
                     </div>
-                /* STATE 2: DROPZONE */
                 ) : !fileToUpload ? (
                      <label className="border-2 border-dashed border-gray-700 rounded-lg h-full flex flex-col items-center justify-center cursor-pointer hover:border-neon-green/50 hover:bg-white/5 transition-all">
                         <input type="file" onChange={onFileDrop} className="hidden" />
                         <Upload className="text-gray-500 mb-4" size={40} />
                         <p className="text-white font-bold text-lg">Drop files to Stage</p>
                     </label>
-                /* STATE 3: READY */
                 ) : (
                     <div className="text-center">
                         <FileText className="mx-auto text-neon-green mb-4" size={48} />
                         <p className="text-xl font-bold text-white mb-2">{fileToUpload.name}</p>
                         <div className="flex justify-center gap-4 mt-8">
                             <button onClick={resetUpload} className="px-6 py-2 border border-gray-600 text-gray-400 rounded hover:text-white">Cancel</button>
-                            <button onClick={startEncryption} className="px-6 py-2 bg-neon-green text-black font-bold rounded hover:bg-white transition flex items-center gap-2">
-                                <Play size={16} fill="black" /> Engage Protocol
-                            </button>
+                            <button onClick={startEncryption} className="px-6 py-2 bg-neon-green text-black font-bold rounded hover:bg-white transition flex items-center gap-2"><Play size={16} fill="black" /> Engage</button>
                         </div>
                     </div>
                 )}
@@ -208,6 +167,7 @@ const Dashboard = () => {
             </div>
         </div>
 
+        {/* RIGHT: LIST */}
         <div className="col-span-1 bg-scifi-panel border border-scifi-border rounded-xl p-4 flex flex-col">
              <h3 className="text-white font-bold text-sm mb-4 flex items-center gap-2"><Server size={16} className="text-neon-blue"/> Vault Contents</h3>
              <div className="overflow-y-auto custom-scrollbar flex-1 space-y-2">

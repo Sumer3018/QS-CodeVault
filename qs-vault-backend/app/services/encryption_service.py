@@ -22,10 +22,11 @@ class EncryptionService:
             # Generate Salt & Derive Key
             aes_key, salt = derive_aes_key(kem_result['shared_secret'])
 
+            # Metadata needed to recover the Shared Secret later
             pqc_sk = keys['sk']
             pqc_cap = kem_result['ciphertext']
         else:
-            # RSA Baseline Simulation
+            # RSA Baseline (Simulation)
             time.sleep(0.05)
             aes_key = get_random_bytes(32)
             salt = get_random_bytes(16)
@@ -38,7 +39,7 @@ class EncryptionService:
         metrics['total_ms'] = (time.perf_counter() - total_start) * 1000
 
         # 3. PACK THE BLOB (Salt + Nonce + Tag + Ciphertext)
-        # This ensures the file carries its own decryption parameters.
+        # This physically attaches the salt to the file. Mismatch is now impossible.
         final_blob = (
             salt +                      # 16 Bytes
             enc_result['nonce'] +       # 12 Bytes
@@ -46,11 +47,9 @@ class EncryptionService:
             enc_result['ciphertext']    # Rest
         )
 
-        # 4. METADATA (Only store what is needed to recover the Shared Secret)
         metadata = {
             "pqc_secret_key": pqc_sk,
             "pqc_ciphertext_cap": pqc_cap
-            # NOTE: We do NOT need to store salt/nonce/tag in DB anymore.
         }
 
         return {
@@ -61,9 +60,8 @@ class EncryptionService:
 
     @staticmethod
     def process_download(file_blob: bytes, metadata: dict, mode: str):
-        # 1. UNPACK THE BLOB
-        # We extract the parameters directly from the file.
         try:
+            # 1. UNPACK HEADERS DIRECTLY FROM FILE
             salt = file_blob[:16]
             nonce = file_blob[16:28]
             tag = file_blob[28:44]
@@ -77,7 +75,7 @@ class EncryptionService:
                 metadata['pqc_ciphertext_cap'],
                 metadata['pqc_secret_key']
             )
-            # Derive the EXACT same key using the extracted salt
+            # Re-derive key using the Salt extracted from the file
             aes_key, _ = derive_aes_key(pqc_result['shared_secret'], salt=salt)
         else:
             raise ValueError("RSA Baseline files are for benchmarking only.")
