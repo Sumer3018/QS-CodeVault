@@ -1,13 +1,19 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { ShieldCheck, Activity, AlertTriangle, Database, LogOut } from 'lucide-react';
+import { supabase } from '../services/supabase'; // ✅ This import is correct
 
 const Sidebar = () => {
-  const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/';
+  const handleLogout = async () => {
+    // 1. Tell Supabase to destroy the session on the server & client
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) console.error('Logout failed:', error);
+
+    // 2. You don't need window.location.href = '/'
+    // The App.js listener will detect the 'SIGNED_OUT' event 
+    // and automatically switch you to the Login screen.
   };
 
   return (

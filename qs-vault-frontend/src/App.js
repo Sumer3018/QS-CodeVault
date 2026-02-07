@@ -1,26 +1,99 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { supabase } from './services/supabase'; // Import the client we made
+
+// Components
 import Layout from './components/Layout';
+
+// Pages
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Performance from './pages/Performance';
 import ThreatModel from './pages/ThreatModel';
-import CloudStorage from './pages/CloudStorage'; // ADDED THIS
-
-const PrivateRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  return token ? <Layout>{children}</Layout> : <Navigate to="/" />;
-};
+import CloudStorage from './pages/CloudStorage';
 
 function App() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 1. Check for an active session immediately when the app loads
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    // 2. Set up a listener for Login/Logout events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    // Cleanup listener on unmount
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Show a loading screen while we ask Supabase "Is this user logged in?"
+  if (loading) {
+    return (
+      <div className="h-screen bg-black text-green-500 flex items-center justify-center font-mono">
+        INITIALIZING QUANTUM LINK...
+      </div>
+    );
+  }
+
+  // 3. The New Protected Route Wrapper
+  // Instead of checking localStorage, it checks the 'session' state variable
+  const ProtectedRoute = ({ children }) => {
+    if (!session) {
+      return <Navigate to="/" replace />;
+    }
+    return <Layout>{children}</Layout>;
+  };
+
   return (
-    <BrowserRouter>
+    // future flags fix the Router warnings you saw earlier
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="/performance" element={<PrivateRoute><Performance /></PrivateRoute>} />
-        <Route path="/threat-model" element={<PrivateRoute><ThreatModel /></PrivateRoute>} />
-        <Route path="/cloud" element={<PrivateRoute><CloudStorage /></PrivateRoute>} />
+        {/* If logged in, go to Dashboard. If not, show Login. */}
+        <Route 
+          path="/" 
+          element={!session ? <Login /> : <Navigate to="/dashboard" replace />} 
+        />
+
+        {/* Protected Routes */}
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/performance" 
+          element={
+            <ProtectedRoute>
+              <Performance />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/threat-model" 
+          element={
+            <ProtectedRoute>
+              <ThreatModel />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/cloud" 
+          element={
+            <ProtectedRoute>
+              <CloudStorage />
+            </ProtectedRoute>
+          } 
+        />
       </Routes>
     </BrowserRouter>
   );

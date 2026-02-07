@@ -9,3 +9,5 @@ pycryptodome==3.20.0     # For AES-GCM and HKDF
 pqcrypto==0.4.0          # For CRYSTALS-Kyber (ML-KEM)
 aiofiles==23.2.1         # For async file I/O
 python-dotenv==1.0.1
+supabase
+python-multipart

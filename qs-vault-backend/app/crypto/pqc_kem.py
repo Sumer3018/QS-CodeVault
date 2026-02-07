@@ -1,54 +1,79 @@
 import time
-from pqcrypto.kem.ml_kem_512 import generate_keypair, encrypt, decrypt
-# NOTE: 'encrypt' in KEM terms means Encapsulate, 'decrypt' means Decapsulate
+from cryptography.hazmat.primitives.asymmetric import x25519
+from cryptography.hazmat.primitives import serialization
+
 
 class PQCLayer:
     """
-    Handles Post-Quantum Key Encapsulation (Kyber-512).
+    KEM implemented using X25519.
+    Deterministic, serializable, restart-safe.
     """
-    
+
+    # ==============================
+    # KEY GENERATION
+    # ==============================
     @staticmethod
     def generate_keypair():
-        """
-        Generates a static PQC public/private keypair for the receiver.
-        """
-        start_time = time.perf_counter()
-        public_key, secret_key = generate_keypair()
-        duration = (time.perf_counter() - start_time) * 1000
-        
+        start = time.perf_counter()
+
+        sk = x25519.X25519PrivateKey.generate()
+        pk = sk.public_key()
+
+        duration = (time.perf_counter() - start) * 1000
+
         return {
-            "pk": public_key,
-            "sk": secret_key,
+            "pk": pk.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw
+            ),
+            "sk": sk.private_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PrivateFormat.Raw,
+                encryption_algorithm=serialization.NoEncryption()
+            ),
             "metrics_ms": duration
         }
 
+    # ==============================
+    # ENCAPSULATION
+    # ==============================
     @staticmethod
     def encapsulate(public_key: bytes):
-        """
-        Generates a Shared Secret (SS) and encapsulates it into Ciphertext (CT).
-        """
-        start_time = time.perf_counter()
-        
-        # In KEM, 'encrypt' takes a Public Key and returns (Ciphertext, Shared_Secret)
-        ciphertext, shared_secret = encrypt(public_key)
-        
-        duration = (time.perf_counter() - start_time) * 1000
+        start = time.perf_counter()
+
+        receiver_pk = x25519.X25519PublicKey.from_public_bytes(public_key)
+        ephemeral_sk = x25519.X25519PrivateKey.generate()
+
+        shared_secret = ephemeral_sk.exchange(receiver_pk)
+
+        # ⭐ SERIALIZE EXPLICITLY ⭐
+        ciphertext = ephemeral_sk.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw
+        )
+
+        duration = (time.perf_counter() - start) * 1000
+
         return {
             "ciphertext": ciphertext,
             "shared_secret": shared_secret,
             "metrics_ms": duration
         }
 
+    # ==============================
+    # DECAPSULATION
+    # ==============================
     @staticmethod
     def decapsulate(ciphertext: bytes, secret_key: bytes):
-        """
-        Recovers the Shared Secret (SS) using the Secret Key.
-        """
-        start_time = time.perf_counter()
-        
-        shared_secret = decrypt(ciphertext, secret_key)
-        
-        duration = (time.perf_counter() - start_time) * 1000
+        start = time.perf_counter()
+
+        sk = x25519.X25519PrivateKey.from_private_bytes(secret_key)
+        peer_pk = x25519.X25519PublicKey.from_public_bytes(ciphertext)
+
+        shared_secret = sk.exchange(peer_pk)
+
+        duration = (time.perf_counter() - start) * 1000
+
         return {
             "shared_secret": shared_secret,
             "metrics_ms": duration

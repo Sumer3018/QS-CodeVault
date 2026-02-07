@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Key, Shuffle, FileLock, UploadCloud, CheckCircle, Lock, Server } from 'lucide-react';
+import { Key, Shuffle, FileLock, UploadCloud, CheckCircle, Lock } from 'lucide-react';
 
 const CryptoFlow = ({ currentStep, mode }) => {
   

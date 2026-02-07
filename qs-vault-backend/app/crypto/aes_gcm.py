@@ -1,4 +1,5 @@
 from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 import time
 
 class AESLayer:
@@ -10,7 +11,7 @@ class AESLayer:
         """
         start = time.perf_counter()
         
-        cipher = AES.new(key, AES.MODE_GCM)
+        cipher = AES.new(key, AES.MODE_GCM, nonce=get_random_bytes(12))
         ciphertext, tag = cipher.encrypt_and_digest(file_bytes)
         
         duration = (time.perf_counter() - start) * 1000

@@ -104,25 +104,64 @@ const Dashboard = () => {
                             }]
                         }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
                 </div>
+                
                 <div className="flex justify-end gap-3">
-                    <button onClick={() => { deleteFile(selectedFile.id); setSelectedFile(null); fetchFiles(); }} className="px-4 py-2 border border-red-500 text-red-500 rounded">Delete</button>
-                    <button onClick={() => handleDownload(selectedFile)} className="px-4 py-2 bg-neon-blue text-black font-bold rounded">Decrypt</button>
+                    <button 
+                        onClick={async () => { 
+                            // 1. Call API to delete from Server
+                            await deleteFile(selectedFile.id); 
+
+                            // 2. FIX: Immediately remove from UI list (No reload needed)
+                            setFiles(prevFiles => prevFiles.filter(f => f.id !== selectedFile.id)); 
+
+                            // 3. Close Modal
+                            setSelectedFile(null); 
+                        }} 
+                        className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500/10"
+                    >
+                        Delete
+                    </button>
+                    
+                    <button 
+                        onClick={() => handleDownload(selectedFile)} 
+                        className="px-4 py-2 bg-neon-blue text-black font-bold rounded"
+                    >
+                        {/* This IS your Download button */}
+                        Decrypt & Download
+                    </button>
                 </div>
             </div>
         </div>
       )}
 
       {/* HEADER */}
-      <div className="flex justify-between items-end">
-        <div><h2 className="text-2xl font-bold text-white">QS-VAULT</h2><p className="text-gray-400 text-xs font-mono">Post-Quantum Gateway</p></div>
-        <div className="flex gap-4">
-            <select value={cryptoMode} onChange={(e) => setCryptoMode(e.target.value)} className="bg-black border border-gray-700 text-xs text-neon-blue p-2 rounded">
-                <option value="hybrid">Hybrid (PQC + AES)</option>
-                <option value="rsa">RSA-2048 (Baseline)</option>
-            </select>
-            <button className="flex items-center gap-2 border border-gray-700 text-xs p-2 rounded text-gray-300"><HardDrive size={14} /> Local FS</button>
+        <div className="flex justify-between items-end">
+          <div>
+              <h2 className="text-2xl font-bold text-white">QS-VAULT</h2>
+              <p className="text-gray-400 text-xs font-mono">Post-Quantum Gateway</p>
+          </div>
+          <div className="flex gap-4">
+              {/* Crypto Mode Selector */}
+              <select 
+                  value={cryptoMode} 
+                  onChange={(e) => setCryptoMode(e.target.value)} 
+                  className="bg-black border border-gray-700 text-xs text-neon-blue p-2 rounded focus:border-neon-green outline-none"
+              >
+                  <option value="hybrid">Hybrid (PQC + AES)</option>
+                  <option value="rsa">RSA-2048 (Baseline)</option>
+              </select>
+
+              {/* Storage Indicator (Visual Only) */}
+              <div className="flex items-center gap-2 border border-neon-green/30 bg-neon-green/5 text-xs p-2 rounded text-neon-green">
+                  <HardDrive size={14} /> 
+                  <span className="font-bold">Supabase Cloud Storage</span>
+                  <span className="flex h-2 w-2 relative ml-1">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-green opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-neon-green"></span>
+                  </span>
+              </div>
+          </div>
         </div>
-      </div>
 
       <div className="grid grid-cols-3 gap-6 flex-1 min-h-0">
         

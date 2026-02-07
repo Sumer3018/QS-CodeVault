@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { login, register } from '../services/api';
+import { supabase } from '../services/supabase';
 import { ShieldCheck, UserPlus, Lock, Key } from 'lucide-react';
 import SciFiAlert from '../components/SciFiAlert';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [isRegister, setIsRegister] = useState(false);
@@ -9,11 +10,13 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [error, setError] = useState('');
-  const [alert, setAlert] = useState(null); // Managed state for GUI Alert
+  const [alert, setAlert] = useState(null);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // STOP PAGE RELOAD
     setError('');
+    console.log("Attempting Auth:", isRegister ? "Register" : "Login");
 
     try {
       if (isRegister) {
@@ -22,37 +25,44 @@ const Login = () => {
           return;
         }
         
-        await register(username, password);
+        // Supabase Register
+        const { error } = await supabase.auth.signUp({
+          email: username,
+          password: password,
+        });
+
+        if (error) throw error;
         
-        // GUI Alert instead of window.alert
         setAlert({
             type: 'success',
             title: 'Identity Verified',
-            message: 'New secure identity has been initialized in the Quantum Ledger. You may now access the Gateway.',
+            message: 'Secure link sent to email. Verify to initialize Quantum Ledger.',
             onClose: () => {
                 setAlert(null);
-                setIsRegister(false); // Auto-switch to login after closing alert
+                setIsRegister(false);
             }
         });
 
       } else {
-        const data = await login(username, password);
-        localStorage.setItem('token', data.access_token);
-        window.location.href = '/dashboard';
+        // Supabase Login
+        const { error } = await supabase.auth.signInWithPassword({
+          email: username,
+          password: password,
+        });
+
+        if (error) throw error;
+
+        console.log("Login Success! Redirecting...");
+        navigate('/dashboard');
       }
     } catch (err) {
-      console.error(err);
-      setError(isRegister 
-        ? "Registration Failed: Username may be taken." 
-        : "Access Denied: Invalid Identity or Passcode."
-      );
+      console.error("Auth Error:", err);
+      setError(err.message || "Access Denied");
     }
   };
 
   return (
     <div className="flex items-center justify-center h-screen bg-scifi-bg font-mono overflow-hidden relative">
-      
-      {/* RENDER THE GUI ALERT IF ACTIVE */}
       {alert && <SciFiAlert {...alert} />}
 
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-green-900/10 via-black to-black"></div>
@@ -75,12 +85,12 @@ const Login = () => {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="group">
              <label className="flex items-center gap-2 text-[10px] uppercase text-gray-500 mb-1 group-focus-within:text-white transition-colors">
-                <ShieldCheck size={12} /> Identity String
+                <ShieldCheck size={12} /> Identity (Email)
              </label>
              <input
-                type="text" required
+                type="email" required
                 className="w-full p-3 bg-black border border-gray-800 rounded focus:border-neon-green focus:outline-none text-white transition-all"
-                placeholder="Enter Username"
+                placeholder="operative@qsvault.net"
                 value={username} onChange={(e) => setUsername(e.target.value)}
               />
           </div>
@@ -120,7 +130,7 @@ const Login = () => {
 
         <div className="mt-6 text-center pt-6 border-t border-gray-800">
            <p className="text-xs text-gray-600 mb-2">{isRegister ? "Already part of the system?" : "Need secure access?"}</p>
-           <button onClick={() => { setIsRegister(!isRegister); setError(''); }} className={`text-xs font-bold uppercase border-b border-transparent transition-colors ${isRegister ? 'text-neon-green hover:border-neon-green' : 'text-neon-blue hover:border-neon-blue'}`}>
+           <button type="button" onClick={() => { setIsRegister(!isRegister); setError(''); }} className={`text-xs font-bold uppercase border-b border-transparent transition-colors ${isRegister ? 'text-neon-green hover:border-neon-green' : 'text-neon-blue hover:border-neon-blue'}`}>
              {isRegister ? "Return to Login" : ">>> Register New Identity <<<"}
            </button>
         </div>

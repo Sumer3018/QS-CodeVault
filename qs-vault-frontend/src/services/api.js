@@ -1,47 +1,36 @@
 import axios from 'axios';
+import { supabase } from './supabase';
 
 // Create Axios instance pointing to your FastAPI backend
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api/v1', // Ensure this matches your Python port
+  baseURL: 'http://127.0.0.1:8000/api/v1', 
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Automatically add the JWT token to every request if it exists
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// --- CRITICAL CHANGE: SUPABASE INTERCEPTOR ---
+// Before every request, ask Supabase for the current user's session token.
+api.interceptors.request.use(async (config) => {
+  const { data } = await supabase.auth.getSession();
+  
+  if (data?.session?.access_token) {
+    config.headers.Authorization = `Bearer ${data.session.access_token}`;
   }
+  
   return config;
+}, (error) => {
+  return Promise.reject(error);
 });
 
-// Auth Services
-export const login = async (username, password) => {
-  // OAuth2 requires x-www-form-urlencoded
-  const params = new URLSearchParams();
-  params.append('username', username);
-  params.append('password', password);
+// --- AUTH SERVICES ---
+// (Deleted. The Frontend now calls supabase.auth directly in Login.js)
 
-  // We override the global JSON header just for this request
-  const response = await api.post('/auth/login', params, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded' 
-    }
-  });
-  return response.data;
-};
-
-export const register = async (username, password) => {
-  return api.post('/auth/register', { username, password });
-};
-
-// File Services
+// --- FILE SERVICES ---
 export const uploadFile = async (file, mode = 'hybrid') => {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('mode', mode); // Send the mode!
+  formData.append('mode', mode); 
   
   return api.post('/files/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -61,8 +50,11 @@ export const inspectFile = async (fileId) => {
 };
 
 export const downloadFile = async (fileId, filename) => {
+  // We need to fetch the session token manually for the blob request 
+  // because axios interceptors can sometimes behave oddly with responseType: 'blob' 
+  // depending on the version, but usually the interceptor above covers it.
   const response = await api.get(`/files/download/${fileId}`, {
-    responseType: 'blob', // Crucial for downloading binary files correctly
+    responseType: 'blob', 
   });
   
   // Create a blob link to trigger the browser download
