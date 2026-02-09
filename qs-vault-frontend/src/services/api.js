@@ -49,25 +49,38 @@ export const inspectFile = async (fileId) => {
   return api.get(`/files/inspect/${fileId}`);
 };
 
-export const downloadFile = async (fileId, filename) => {
-  // We need to fetch the session token manually for the blob request 
-  // because axios interceptors can sometimes behave oddly with responseType: 'blob' 
-  // depending on the version, but usually the interceptor above covers it.
-  const response = await api.get(`/files/download/${fileId}`, {
-    responseType: 'blob', 
+export const downloadEncryptedFile = async (fileId, filename) => {
+  const response = await api.get(`/files/download/encrypted/${fileId}`, {
+    responseType: 'blob',
   });
-  
-  // Create a blob link to trigger the browser download
+
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename + ".enc");
+  document.body.appendChild(link);
+  link.click();
+
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+
+export const downloadDecryptedFile = async (fileId, filename) => {
+  const response = await api.get(`/files/download/decrypted/${fileId}`, {
+    responseType: 'blob',
+  });
+
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement('a');
   link.href = url;
   link.setAttribute('download', filename);
   document.body.appendChild(link);
   link.click();
-  
-  // Cleanup
+
   link.remove();
   window.URL.revokeObjectURL(url);
 };
+
 
 export default api;

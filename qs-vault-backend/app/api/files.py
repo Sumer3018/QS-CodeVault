@@ -107,7 +107,7 @@ def list_files(authorization: str = Header(None)):
 
 # In app/api/files.py
 
-@router.get("/download/{file_id}")
+@router.get("/download/decrypted/{file_id}")
 def download_file(file_id: str, authorization: str = Header(None)):
     get_user_from_token(authorization)
 
@@ -185,3 +185,27 @@ def inspect_file(file_id: str, authorization: str = Header(None)):
     blob = supabase_client.storage.from_(
         "encrypted_vault").download(f['storage_path'])
     return {"filename": f['filename'], "cloud_path": f['storage_path'], "hex_preview": blob[:64].hex().upper(), "size": f['file_size']}
+
+
+@router.get("/download/encrypted/{file_id}")
+def download_encrypted(file_id: str, authorization: str = Header(None)):
+    get_user_from_token(authorization)
+
+    resp = supabase_client.table("files").select(
+        "*").eq("id", file_id).execute()
+
+    if not resp.data:
+        raise HTTPException(404, "File not found")
+
+    f = resp.data[0]
+
+    blob = supabase_client.storage.from_(
+        "encrypted_vault").download(f['storage_path'])
+
+    return Response(
+        content=blob,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{f["filename"]}.enc"'
+        }
+    )

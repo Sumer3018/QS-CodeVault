@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { uploadFile, getFiles, downloadFile, deleteFile } from '../services/api';
+import { uploadFile, getFiles, downloadEncryptedFile, downloadDecryptedFile, deleteFile } from '../services/api';
 import CryptoFlow from '../components/CryptoFlow';
 import SciFiAlert from '../components/SciFiAlert';
 import { Upload, Server, HardDrive, Terminal, Activity, Play, X, RefreshCw, FileCheck, FileText } from 'lucide-react';
@@ -69,20 +69,31 @@ const Dashboard = () => {
     }
   };
 
-  const handleDownload = async (file) => {
-    if (file.mode !== 'hybrid') {
-        setCustomAlert({ type: 'error', title: 'Action Denied', message: 'RSA is for benchmarking only.' });
-        return;
-    }
-    try {
-      addLog(`REQ: Download ${file.filename}`);
-      await downloadFile(file.id, file.filename);
-      addLog("SUCCESS: Decrypted.");
-    } catch (err) {
-      addLog("❌ FAILURE: Integrity Check Failed.");
-      setCustomAlert({ type: 'error', title: 'Integrity Breach', message: 'File signature mismatch. Download aborted.' });
-    }
-  };
+  const handleEncryptedDownload = async (file) => {
+  try {
+    addLog(`REQ: Download encrypted ${file.filename}`);
+    await downloadEncryptedFile(file.id, file.filename);
+    addLog("SUCCESS: Encrypted file downloaded.");
+  } catch (err) {
+    setCustomAlert({ type: 'error', title: 'Error', message: 'Download failed.' });
+  }
+};
+
+const handleDecryptedDownload = async (file) => {
+  if (file.mode !== 'hybrid') {
+    setCustomAlert({ type: 'error', title: 'Action Denied', message: 'RSA is benchmark only.' });
+    return;
+  }
+  try {
+    addLog(`REQ: Decrypt ${file.filename}`);
+    await downloadDecryptedFile(file.id, file.filename);
+    addLog("SUCCESS: Decrypted.");
+  } catch (err) {
+    addLog("❌ FAILURE: Integrity Check Failed.");
+    setCustomAlert({ type: 'error', title: 'Integrity Breach', message: 'Signature mismatch.' });
+  }
+};
+
 
   return (
     <div className="p-8 space-y-6 relative h-full flex flex-col">
@@ -123,12 +134,19 @@ const Dashboard = () => {
                     </button>
                     
                     <button 
-                        onClick={() => handleDownload(selectedFile)} 
+                    onClick={() => handleEncryptedDownload(selectedFile)} 
+                    className="px-4 py-2 border border-gray-500 text-gray-300 rounded hover:bg-white/10"
+                    >
+                        Download Encrypted
+                    </button>
+
+                    <button 
+                        onClick={() => handleDecryptedDownload(selectedFile)} 
                         className="px-4 py-2 bg-neon-blue text-black font-bold rounded"
                     >
-                        {/* This IS your Download button */}
                         Decrypt & Download
                     </button>
+
                 </div>
             </div>
         </div>
