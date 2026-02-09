@@ -10,39 +10,76 @@ from app.core.server_keys import SERVER_PUBLIC_KEY, SERVER_SECRET_KEY
 logger = logging.getLogger("uvicorn")
 
 
+def now():
+    return time.perf_counter()
+
+
 class EncryptionService:
 
+    # ===============================
+    # UPLOAD
+    # ===============================
     @staticmethod
     def process_upload(file_bytes: bytes, mode: str = "hybrid"):
-        metrics = {
-            'pqc_encap_ms': 0.0,
-            'aes_enc_ms': 0.0,
-            'total_ms': 0.0
-        }
+        total_start = now()
 
-        total_start = time.perf_counter()
+        metrics = {}
 
         if mode == "hybrid":
+            # --------------------
+            # KEM ENCAP
+            # --------------------
+            s = now()
             kem_result = PQCLayer.encapsulate(SERVER_PUBLIC_KEY)
-            metrics['pqc_encap_ms'] = kem_result['metrics_ms']
+            metrics["kem_encap_us"] = (now() - s) * 1e6
+            metrics["ciphertext_size"] = len(kem_result['ciphertext'])
 
+            # --------------------
+            # HKDF
+            # --------------------
+            s = now()
             aes_key, salt = derive_aes_key(kem_result['shared_secret'])
+            metrics["kdf_us"] = (now() - s) * 1e6
+            metrics["salt_size"] = len(salt)
+
             print("UPLOAD SALT:", salt.hex())
 
-            pqc_cap_safe = base64.b64encode(kem_result['ciphertext']).decode()
+            pqc_cap_safe = base64.b64encode(
+                kem_result['ciphertext']).decode()
+
         else:
             raise ValueError("Unsupported mode")
 
+        # --------------------
+        # AES ENCRYPT
+        # --------------------
+        s = now()
         enc_result = AESLayer.encrypt_file(file_bytes, aes_key)
-        metrics['aes_enc_ms'] = enc_result['metrics_ms']
-        metrics['total_ms'] = (time.perf_counter() - total_start) * 1000
+        aes_time = (now() - s)
+        metrics["aes_enc_ms"] = aes_time * 1000
+        metrics["throughput_mb_s"] = (
+            len(file_bytes) / (1024 * 1024)) / (aes_time + 1e-9)
 
+        metrics["nonce_size"] = len(enc_result['nonce'])
+        metrics["tag_size"] = len(enc_result['tag'])
+
+        # --------------------
+        # PACK
+        # --------------------
+        s = now()
         final_blob = (
             salt +
             enc_result['nonce'] +
             enc_result['tag'] +
             enc_result['ciphertext']
         )
+        metrics["pack_us"] = (now() - s) * 1e6
+
+        # --------------------
+        # TOTAL
+        # --------------------
+        metrics["total_ms"] = (now() - total_start) * 1000
+        metrics["file_size"] = len(file_bytes)
 
         metadata = {
             "pqc_secret_key": None,
@@ -60,6 +97,9 @@ class EncryptionService:
             "metrics": metrics
         }
 
+    # ===============================
+    # DOWNLOAD (unchanged)
+    # ===============================
     @staticmethod
     def process_download(file_blob: bytes, metadata: dict, mode: str):
         try:

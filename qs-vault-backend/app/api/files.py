@@ -68,9 +68,14 @@ async def upload_file(
             "algo_mode": mode,
             "pqc_secret_key": res['metadata']['pqc_secret_key'],
             "pqc_ciphertext_cap": res['metadata']['pqc_ciphertext_cap'],
-            "time_pqc": res['metrics'].get('pqc_encap_ms', 0),
+
+            # Old summary metrics (keep for compatibility)
+            "time_pqc": res['metrics'].get('kem_encap_us', 0) / 1000,
             "time_aes": res['metrics'].get('aes_enc_ms', 0),
-            "time_total": res['metrics'].get('total_ms', 0)
+            "time_total": res['metrics'].get('total_ms', 0),
+
+            # ⭐ NEW SUPER DATA ⭐
+            "metrics_json": res['metrics']
         }
 
         data, count = supabase_client.table("files").insert(db_file).execute()
@@ -97,9 +102,14 @@ def list_files(authorization: str = Header(None)):
     response = supabase_client.table("files").select(
         "*").order("created_at", desc=True).execute()
     return [{
-        "id": f['id'], "filename": f['filename'], "size": f['file_size'],
-        "date": f['created_at'], "mode": f['algo_mode'],
-        "metrics": {"pqc": f['time_pqc'], "aes": f['time_aes'], "total": f['time_total']}
+        "id": f['id'],
+        "filename": f['filename'],
+        "size": f['file_size'],
+        "date": f['created_at'],
+        "mode": f['algo_mode'],
+
+        # ⭐ NEW
+        "metrics": f.get('metrics_json', {})
     } for f in response.data]
 
 

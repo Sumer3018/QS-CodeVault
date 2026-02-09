@@ -107,10 +107,15 @@ const handleDecryptedDownload = async (file) => {
                 <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3"><Activity className="text-neon-blue" /> File Security Report</h2>
                 <div className="bg-black/50 p-4 rounded-xl border border-gray-800 mb-6 h-48">
                      <Bar data={{
-                            labels: ['PQC/Key', 'AES', 'Total'],
+                            labels: ['KEM', 'AES', 'Total'],
                             datasets: [{
                                 label: 'Latency (ms)',
-                                data: [selectedFile.metrics.pqc, selectedFile.metrics.aes, selectedFile.metrics.total],
+                                data: [
+  (selectedFile.metrics?.kem_encap_us || 0) / 1000,
+  selectedFile.metrics?.aes_enc_ms || 0,
+  selectedFile.metrics?.total_ms || 0
+],
+
                                 backgroundColor: ['#00ff9d', '#00f3ff', '#ffffff'],
                             }]
                         }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
