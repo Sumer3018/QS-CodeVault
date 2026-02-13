@@ -11,6 +11,8 @@ import Dashboard from './pages/Dashboard';
 import Performance from './pages/Performance';
 import ThreatModel from './pages/ThreatModel';
 import CloudStorage from './pages/CloudStorage';
+import Benchmark from './pages/Benchmark';
+
 
 function App() {
   const [session, setSession] = useState(null);
@@ -46,7 +48,7 @@ function App() {
   // Instead of checking localStorage, it checks the 'session' state variable
   const ProtectedRoute = ({ children }) => {
     if (!session) {
-      return <Navigate to="/" replace />;
+      return <Navigate to="/threat-model" replace />;
     }
     return <Layout>{children}</Layout>;
   };
@@ -55,46 +57,57 @@ function App() {
     // future flags fix the Router warnings you saw earlier
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
-        {/* If logged in, go to Dashboard. If not, show Login. */}
-        <Route 
-          path="/" 
-          element={!session ? <Login /> : <Navigate to="/dashboard" replace />} 
-        />
 
-        {/* Protected Routes */}
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/performance" 
-          element={
-            <ProtectedRoute>
-              <Performance />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/threat-model" 
-          element={
-            <ProtectedRoute>
-              <ThreatModel />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/cloud" 
-          element={
-            <ProtectedRoute>
-              <CloudStorage />
-            </ProtectedRoute>
-          } 
-        />
-      </Routes>
+  {/* DEFAULT ENTRY */}
+  <Route path="/" element={<Navigate to="/threat-model" replace />} />
+
+  <Route 
+    path="/dashboard" 
+    element={
+      <ProtectedRoute>
+        <Dashboard />
+      </ProtectedRoute>
+    } 
+  />
+
+  <Route 
+    path="/performance" 
+    element={
+      <ProtectedRoute>
+        <Performance />
+      </ProtectedRoute>
+    } 
+  />
+
+  <Route 
+    path="/benchmark" 
+    element={
+      <ProtectedRoute>
+        <Benchmark />
+      </ProtectedRoute>
+    } 
+  />
+
+  <Route 
+    path="/threat-model" 
+    element={
+      <ProtectedRoute>
+        <ThreatModel />
+      </ProtectedRoute>
+    } 
+  />
+
+  <Route 
+    path="/cloud" 
+    element={
+      <ProtectedRoute>
+        <CloudStorage />
+      </ProtectedRoute>
+    } 
+  />
+
+</Routes>
+
     </BrowserRouter>
   );
 }

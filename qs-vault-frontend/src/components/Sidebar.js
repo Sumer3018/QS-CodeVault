@@ -27,11 +27,13 @@ const Sidebar = () => {
       </div>
 
       <nav className="flex-1 space-y-2">
+        <NavItem to="/threat-model" icon={<AlertTriangle size={18} />} label="About & Threat Model" />
         <NavItem to="/dashboard" icon={<ShieldCheck size={18} />} label="Secure Gateway" />
         <NavItem to="/performance" icon={<Activity size={18} />} label="Performance Monitor" />
-        <NavItem to="/threat-model" icon={<AlertTriangle size={18} />} label="Threat Model" />
+        <NavItem to="/benchmark" icon={<Activity size={18} />} label="Benchmark Lab" />
         <NavItem to="/cloud" icon={<Database size={18} />} label="Cloud Storage" />
       </nav>
+
 
       <div className="border-t border-gray-800 pt-4 mt-auto">
         <button 
