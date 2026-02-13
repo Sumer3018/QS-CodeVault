@@ -21,75 +21,74 @@ class EncryptionService:
     # ===============================
     @staticmethod
     def process_upload(file_bytes: bytes, mode: str = "hybrid"):
-        total_start = now()
+        total_start = time.perf_counter()
 
-        metrics = {}
+        metrics = {
+            "phase_1": {},
+            "phase_2": {},
+            "phase_3": {},
+            "phase_4": {},
+            "phase_5": {},
+            "total_ms": 0
+        }
 
-        if mode == "hybrid":
-            # --------------------
-            # KEM ENCAP
-            # --------------------
-            s = now()
-            kem_result = PQCLayer.encapsulate(SERVER_PUBLIC_KEY)
-            metrics["kem_encap_us"] = (now() - s) * 1e6
-            metrics["ciphertext_size"] = len(kem_result['ciphertext'])
+        # =============================
+        # PHASE 1 — LOCAL PREP
+        # =============================
+        p = time.perf_counter()
+        file_size = len(file_bytes)
+        metrics["phase_1"]["size_bytes"] = file_size
+        metrics["phase_1"]["read_ms"] = (time.perf_counter() - p) * 1000
 
-            # --------------------
-            # HKDF
-            # --------------------
-            s = now()
-            aes_key, salt = derive_aes_key(kem_result['shared_secret'])
-            metrics["kdf_us"] = (now() - s) * 1e6
-            metrics["salt_size"] = len(salt)
+        # =============================
+        # PHASE 2 — KEY AGREEMENT
+        # =============================
+        p = time.perf_counter()
+        kem_result = PQCLayer.encapsulate(SERVER_PUBLIC_KEY)
+        metrics["phase_2"]["encap_us"] = (time.perf_counter() - p) * 1e6
 
-            print("UPLOAD SALT:", salt.hex())
+        metrics["phase_2"]["ciphertext_size"] = len(kem_result["ciphertext"])
+        metrics["phase_2"]["ss_preview"] = kem_result["shared_secret"].hex()[
+            :16]
 
-            pqc_cap_safe = base64.b64encode(
-                kem_result['ciphertext']).decode()
+        # =============================
+        # PHASE 3 — HKDF
+        # =============================
+        p = time.perf_counter()
+        aes_key, salt = derive_aes_key(kem_result["shared_secret"])
+        metrics["phase_3"]["hkdf_us"] = (time.perf_counter() - p) * 1e6
 
-        else:
-            raise ValueError("Unsupported mode")
+        # =============================
+        # PHASE 4 — AES
+        # =============================
+        p = time.perf_counter()
+        enc = AESLayer.encrypt_file(file_bytes, aes_key)
+        aes_time = (time.perf_counter() - p) * 1000
 
-        # --------------------
-        # AES ENCRYPT
-        # --------------------
-        s = now()
-        enc_result = AESLayer.encrypt_file(file_bytes, aes_key)
-        aes_time = (now() - s)
-        metrics["aes_enc_ms"] = aes_time * 1000
-        metrics["throughput_mb_s"] = (
-            len(file_bytes) / (1024 * 1024)) / (aes_time + 1e-9)
+        metrics["phase_4"]["aes_enc_ms"] = aes_time
+        metrics["phase_4"]["nonce_size"] = len(enc["nonce"])
+        metrics["phase_4"]["tag_size"] = len(enc["tag"])
 
-        metrics["nonce_size"] = len(enc_result['nonce'])
-        metrics["tag_size"] = len(enc_result['tag'])
+        mb = file_size / (1024 * 1024)
+        metrics["phase_4"]["throughput_mb_s"] = mb / (aes_time / 1000 + 1e-9)
 
-        # --------------------
-        # PACK
-        # --------------------
-        s = now()
-        final_blob = (
-            salt +
-            enc_result['nonce'] +
-            enc_result['tag'] +
-            enc_result['ciphertext']
-        )
-        metrics["pack_us"] = (now() - s) * 1e6
+        # =============================
+        # PHASE 5 — PACK
+        # =============================
+        p = time.perf_counter()
+        final_blob = salt + enc["nonce"] + enc["tag"] + enc["ciphertext"]
+        metrics["phase_5"]["pack_us"] = (time.perf_counter() - p) * 1e6
 
-        # --------------------
-        # TOTAL
-        # --------------------
-        metrics["total_ms"] = (now() - total_start) * 1000
-        metrics["file_size"] = len(file_bytes)
+        metrics["total_ms"] = (time.perf_counter() - total_start) * 1000
+
+        pqc_cap_safe = base64.b64encode(kem_result["ciphertext"]).decode()
 
         metadata = {
             "pqc_secret_key": None,
             "pqc_ciphertext_cap": pqc_cap_safe
         }
 
-        print("UPLOAD OK")
-        print("UPLOAD AES:", aes_key.hex())
-        print("UPLOAD SS:", kem_result['shared_secret'].hex())
-        print("UPLOAD CT:", kem_result['ciphertext'].hex())
+        print("UPLOAD OK | total:", metrics["total_ms"])
 
         return {
             "encrypted_file": final_blob,
@@ -100,6 +99,7 @@ class EncryptionService:
     # ===============================
     # DOWNLOAD (unchanged)
     # ===============================
+
     @staticmethod
     def process_download(file_blob: bytes, metadata: dict, mode: str):
         try:

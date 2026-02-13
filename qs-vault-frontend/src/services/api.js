@@ -13,15 +13,16 @@ const api = axios.create({
 // Before every request, ask Supabase for the current user's session token.
 api.interceptors.request.use(async (config) => {
   const { data } = await supabase.auth.getSession();
-  
-  if (data?.session?.access_token) {
-    config.headers.Authorization = `Bearer ${data.session.access_token}`;
+
+  if (!data?.session) {
+    console.warn("User not logged in");
+    return config;
   }
-  
+
+  config.headers.Authorization = `Bearer ${data.session.access_token}`;
   return config;
-}, (error) => {
-  return Promise.reject(error);
 });
+
 
 // --- AUTH SERVICES ---
 // (Deleted. The Frontend now calls supabase.auth directly in Login.js)

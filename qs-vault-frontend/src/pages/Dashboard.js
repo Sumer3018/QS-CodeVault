@@ -9,244 +9,323 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Toolti
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const Dashboard = () => {
+
   const [files, setFiles] = useState([]);
   const [fileToUpload, setFileToUpload] = useState(null);
-  const [uploadStep, setUploadStep] = useState(0); 
-  const [logs, setLogs] = useState([]); 
-  const [selectedFile, setSelectedFile] = useState(null); 
+  const [uploadStep, setUploadStep] = useState(0);
+  const [logs, setLogs] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [successMode, setSuccessMode] = useState(false);
   const [customAlert, setCustomAlert] = useState(null);
-  const [cryptoMode, setCryptoMode] = useState('hybrid'); 
+  const [cryptoMode, setCryptoMode] = useState('hybrid');
+  const [activeTab, setActiveTab] = useState("overview");
+
+  // ================= THEME =================
+  const isHybrid = cryptoMode === "hybrid";
+  const primaryColor = isHybrid ? "text-neon-green" : "text-purple-400";
+  const borderColor = isHybrid ? "border-neon-green" : "border-purple-400";
+  const buttonColor = isHybrid ? "bg-neon-green text-black" : "bg-purple-500 text-white";
 
   useEffect(() => { fetchFiles(); }, []);
+
+  const fetchFiles = async () => {
+    try {
+      const res = await getFiles();
+      setFiles(res.data || []);
+    } catch {}
+  };
 
   const addLog = (msg) => {
     const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
     setLogs(prev => [`[${timestamp}] ${msg}`, ...prev]);
   };
 
-  const fetchFiles = async () => {
-    try { const res = await getFiles(); setFiles(res.data); } catch (err) {}
-  };
-
   const resetUpload = () => {
-      setFileToUpload(null);
-      setSuccessMode(false);
-      setUploadStep(0);
+    setFileToUpload(null);
+    setSuccessMode(false);
+    setUploadStep(0);
   };
 
   const onFileDrop = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-          setFileToUpload(file);
-          setSuccessMode(false);
-          addLog(`STAGE: ${file.name} loaded.`);
-      }
+    const f = e.target.files[0];
+    if (f) {
+      setFileToUpload(f);
+      setSuccessMode(false);
+      addLog(`STAGE: ${f.name} loaded.`);
+    }
   };
 
   const startEncryption = async () => {
     if (!fileToUpload) return;
+
     setUploadStep(1);
-    setLogs([]); 
+    setLogs([]);
     addLog(`INIT: Protocol for ${fileToUpload.name}`);
-    
+
     if (cryptoMode === 'hybrid') {
-        setTimeout(() => { setUploadStep(2); addLog("PQC: Generating Keys..."); }, 800);
-        setTimeout(() => { setUploadStep(3); addLog("PQC: Encapsulating..."); }, 2000);
+      setTimeout(() => { setUploadStep(2); addLog("PQC: Generating Keys..."); }, 800);
+      setTimeout(() => { setUploadStep(3); addLog("PQC: Encapsulating..."); }, 2000);
     } else {
-        setTimeout(() => { addLog("RSA: Generating Keys..."); }, 800);
+      setTimeout(() => { addLog("RSA: Generating Keys..."); }, 800);
     }
+
     setTimeout(() => { setUploadStep(4); addLog("KDF: Deriving Key..."); }, 3000);
 
     try {
-      const res = await uploadFile(fileToUpload, cryptoMode); 
+      const res = await uploadFile(fileToUpload, cryptoMode);
       setTimeout(() => { setUploadStep(5); addLog("AES: Encrypting..."); }, 4000);
-      setTimeout(() => { setSuccessMode(true); addLog(`SUCCESS: Sealed ID: ${res.data.file_id}`); fetchFiles(); }, 5500);
-    } catch (err) {
+      setTimeout(() => {
+        setSuccessMode(true);
+        addLog(`SUCCESS: Sealed ID: ${res.data.file_id}`);
+        fetchFiles();
+      }, 5500);
+    } catch {
       setUploadStep(0);
-      addLog("ERROR: Failed.");
-      setCustomAlert({ type: 'error', title: 'Upload Failed', message: 'Server error. Check backend logs.' });
+      setCustomAlert({ type: 'error', title: 'Upload Failed', message: 'Server error.' });
     }
   };
 
   const handleEncryptedDownload = async (file) => {
-  try {
-    addLog(`REQ: Download encrypted ${file.filename}`);
-    await downloadEncryptedFile(file.id, file.filename);
-    addLog("SUCCESS: Encrypted file downloaded.");
-  } catch (err) {
-    setCustomAlert({ type: 'error', title: 'Error', message: 'Download failed.' });
-  }
-};
+    try {
+      await downloadEncryptedFile(file.id, file.filename);
+    } catch {
+      setCustomAlert({ type: 'error', title: 'Error', message: 'Download failed.' });
+    }
+  };
 
-const handleDecryptedDownload = async (file) => {
-  if (file.mode !== 'hybrid') {
-    setCustomAlert({ type: 'error', title: 'Action Denied', message: 'RSA is benchmark only.' });
-    return;
-  }
-  try {
-    addLog(`REQ: Decrypt ${file.filename}`);
-    await downloadDecryptedFile(file.id, file.filename);
-    addLog("SUCCESS: Decrypted.");
-  } catch (err) {
-    addLog("❌ FAILURE: Integrity Check Failed.");
-    setCustomAlert({ type: 'error', title: 'Integrity Breach', message: 'Signature mismatch.' });
-  }
-};
-
+  const handleDecryptedDownload = async (file) => {
+    if (file.mode !== 'hybrid') {
+      setCustomAlert({ type: 'error', title: 'Denied', message: 'RSA benchmark only.' });
+      return;
+    }
+    try {
+      await downloadDecryptedFile(file.id, file.filename);
+    } catch {
+      setCustomAlert({ type: 'error', title: 'Integrity Breach', message: 'Signature mismatch.' });
+    }
+  };
 
   return (
     <div className="p-8 space-y-6 relative h-full flex flex-col">
       {customAlert && <SciFiAlert {...customAlert} onClose={() => setCustomAlert(null)} />}
-      
-      {/* Report Modal */}
+
+      {/* ================= MODAL ================= */}
       {selectedFile && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 backdrop-blur-md">
-            <div className="bg-scifi-panel border border-neon-blue w-[600px] p-8 rounded-2xl relative">
-                <button onClick={() => setSelectedFile(null)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X /></button>
-                <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3"><Activity className="text-neon-blue" /> File Security Report</h2>
-                <div className="bg-black/50 p-4 rounded-xl border border-gray-800 mb-6 h-48">
-                     <Bar data={{
-                            labels: ['KEM', 'AES', 'Total'],
-                            datasets: [{
-                                label: 'Latency (ms)',
-                                data: [
-  (selectedFile.metrics?.kem_encap_us || 0) / 1000,
-  selectedFile.metrics?.aes_enc_ms || 0,
-  selectedFile.metrics?.total_ms || 0
-],
+          <div className="bg-scifi-panel border border-neon-blue w-[650px] p-8 rounded-2xl relative">
+            <button onClick={() => setSelectedFile(null)} className="absolute top-4 right-4"><X /></button>
 
-                                backgroundColor: ['#00ff9d', '#00f3ff', '#ffffff'],
-                            }]
-                        }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
-                </div>
-                
-                <div className="flex justify-end gap-3">
-                    <button 
-                        onClick={async () => { 
-                            // 1. Call API to delete from Server
-                            await deleteFile(selectedFile.id); 
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+              <Activity className="text-neon-blue" /> File Security Report
+            </h2>
 
-                            // 2. FIX: Immediately remove from UI list (No reload needed)
-                            setFiles(prevFiles => prevFiles.filter(f => f.id !== selectedFile.id)); 
-
-                            // 3. Close Modal
-                            setSelectedFile(null); 
-                        }} 
-                        className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500/10"
-                    >
-                        Delete
-                    </button>
-                    
-                    <button 
-                    onClick={() => handleEncryptedDownload(selectedFile)} 
-                    className="px-4 py-2 border border-gray-500 text-gray-300 rounded hover:bg-white/10"
-                    >
-                        Download Encrypted
-                    </button>
-
-                    <button 
-                        onClick={() => handleDecryptedDownload(selectedFile)} 
-                        className="px-4 py-2 bg-neon-blue text-black font-bold rounded"
-                    >
-                        Decrypt & Download
-                    </button>
-
-                </div>
+            {/* Tabs */}
+            <div className="flex gap-2 mb-4 text-xs">
+              <Tab id="overview" active={activeTab} set={setActiveTab}/>
+              <Tab id="deep" active={activeTab} set={setActiveTab}/>
             </div>
+
+            {/* OVERVIEW */}
+            {activeTab === "overview" && (() => {
+              const m = selectedFile?.metrics || {};
+              const p2 = m.phase_2 || {};
+              const p4 = m.phase_4 || {};
+
+              return (
+                <div className="bg-black/50 p-4 rounded-xl border border-gray-800 h-56">
+                  <Bar
+                    data={{
+                      labels: ['KEM', 'AES', 'Total'],
+                      datasets: [{
+                        label: 'Latency (ms)',
+                        data: [
+                          (p2.encap_us || 0) / 1000,
+                          p4.aes_enc_ms || 0,
+                          m.total_ms || m.total || 0
+                        ],
+                        backgroundColor: ['#00ff9d', '#00f3ff', '#ffffff'],
+                      }]
+                    }}
+                    options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }}
+                  />
+                </div>
+              );
+            })()}
+
+            {/* DEEP */}
+            {activeTab === "deep" && (() => {
+              const m = selectedFile?.metrics || {};
+              const p1 = m.phase_1 || {};
+              const p2 = m.phase_2 || {};
+              const p3 = m.phase_3 || {};
+              const p4 = m.phase_4 || {};
+              const p5 = m.phase_5 || {};
+
+              return (
+                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                  <Metric label="File Size" value={(p1.size_bytes || 0) + " B"} />
+                  <Metric label="Read" value={p1.read_ms != null ? p1.read_ms.toFixed(2) + " ms" : "N/A"}
+                   />
+                  <Metric label="Encapsulation" value={(p2.encap_us || 0) + " us"} />
+                  <Metric label="HKDF" value={(p3.hkdf_us || 0) + " us"} />
+                  <Metric label="AES" value={(p4.aes_enc_ms || 0).toFixed(2) + " ms"} />
+                  <Metric label="Throughput" value={(p4.throughput_mb_s || 0).toFixed(2) + " MB/s"} />
+                  <Metric label="Pack" value={(p5.pack_us || 0) + " us"} />
+                  <Metric label="Total" value={(m.total_ms || 0).toFixed(2) + " ms"} />
+                </div>
+              );
+            })()}
+
+            {/* BUTTONS */}
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={async () => {
+                  await deleteFile(selectedFile.id);
+                  setFiles(prev => prev.filter(f => f.id !== selectedFile.id));
+                  setSelectedFile(null);
+                }}
+                className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500/10"
+              >
+                Delete
+              </button>
+
+              <button
+                onClick={() => handleEncryptedDownload(selectedFile)}
+                className="px-4 py-2 border border-gray-500 text-gray-300 rounded hover:bg-white/10"
+              >
+                Download Encrypted
+              </button>
+
+              <button
+                onClick={() => handleDecryptedDownload(selectedFile)}
+                className={`px-4 py-2 font-bold rounded ${buttonColor}`}
+              >
+                Decrypt & Download
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* HEADER */}
-        <div className="flex justify-between items-end">
-          <div>
-              <h2 className="text-2xl font-bold text-white">QS-VAULT</h2>
-              <p className="text-gray-400 text-xs font-mono">Post-Quantum Gateway</p>
-          </div>
-          <div className="flex gap-4">
-              {/* Crypto Mode Selector */}
-              <select 
-                  value={cryptoMode} 
-                  onChange={(e) => setCryptoMode(e.target.value)} 
-                  className="bg-black border border-gray-700 text-xs text-neon-blue p-2 rounded focus:border-neon-green outline-none"
-              >
-                  <option value="hybrid">Hybrid (PQC + AES)</option>
-                  <option value="rsa">RSA-2048 (Baseline)</option>
-              </select>
-
-              {/* Storage Indicator (Visual Only) */}
-              <div className="flex items-center gap-2 border border-neon-green/30 bg-neon-green/5 text-xs p-2 rounded text-neon-green">
-                  <HardDrive size={14} /> 
-                  <span className="font-bold">Supabase Cloud Storage</span>
-                  <span className="flex h-2 w-2 relative ml-1">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-green opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-neon-green"></span>
-                  </span>
-              </div>
-          </div>
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className={`text-2xl font-bold ${primaryColor}`}>QS-VAULT</h2>
+          <p className="text-gray-400 text-xs font-mono">Post-Quantum Gateway</p>
         </div>
 
+        <div className="flex gap-4">
+          <select
+            value={cryptoMode}
+            onChange={(e) => setCryptoMode(e.target.value)}
+            className={`bg-black border ${borderColor} ${primaryColor} text-xs p-2 rounded`}
+          >
+            <option value="hybrid">Hybrid PQC</option>
+            <option value="rsa">RSA-2048</option>
+          </select>
+
+          <div className="flex items-center gap-2 border border-neon-green/30 bg-neon-green/5 text-xs p-2 rounded text-neon-green">
+            <HardDrive size={14}/>
+            <span className="font-bold">MinIO Cloud Storage</span>
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN */}
       <div className="grid grid-cols-3 gap-6 flex-1 min-h-0">
-        
-        {/* LEFT: UPLOAD */}
+
+        {/* LEFT */}
         <div className="col-span-2 flex flex-col gap-6">
-            <div className="bg-scifi-panel border border-scifi-border rounded-xl p-6 relative overflow-hidden min-h-[300px] flex flex-col justify-center">
-                {uploadStep > 0 || successMode ? (
-                    <div className="text-center w-full">
-                        <h3 className="text-neon-green font-bold mb-8 animate-pulse">{successMode ? "ENCRYPTION COMPLETE" : "ENCRYPTION RUNNING..."}</h3>
-                        <CryptoFlow currentStep={uploadStep === 0 ? 5 : uploadStep} mode={cryptoMode} />
-                        {successMode && (
-                            <div className="mt-8 bg-neon-green/5 border border-neon-green/30 p-4 rounded-lg animate-in slide-in-from-bottom-4">
-                                <div className="flex items-center justify-center gap-3 mb-2"><FileCheck className="text-neon-green" size={24} /><span className="text-white font-bold text-lg">Sealed & Stored</span></div>
-                                <button onClick={resetUpload} className="mt-2 px-6 py-2 bg-white text-black font-bold rounded hover:bg-neon-green transition flex items-center gap-2 mx-auto text-sm"><RefreshCw size={14} /> Encrypt Another</button>
-                            </div>
-                        )}
+
+          <div className="bg-scifi-panel border border-scifi-border rounded-xl p-6 min-h-[300px] flex flex-col justify-center">
+            {uploadStep > 0 || successMode ? (
+              <div className="text-center">
+                <h3 className={`${primaryColor} font-bold mb-6`}>
+                  {successMode ? "ENCRYPTION COMPLETE" : "ENCRYPTION RUNNING"}
+                </h3>
+
+                <CryptoFlow currentStep={uploadStep} mode={cryptoMode} />
+
+                {successMode && (
+                  <div className="mt-8 bg-neon-green/5 border border-neon-green/30 p-4 rounded-lg">
+                    <div className="flex items-center justify-center gap-3 mb-2">
+                      <FileCheck className="text-neon-green" size={24}/>
+                      <span className="text-white font-bold">Sealed & Stored</span>
                     </div>
-                ) : !fileToUpload ? (
-                     <label className="border-2 border-dashed border-gray-700 rounded-lg h-full flex flex-col items-center justify-center cursor-pointer hover:border-neon-green/50 hover:bg-white/5 transition-all">
-                        <input type="file" onChange={onFileDrop} className="hidden" />
-                        <Upload className="text-gray-500 mb-4" size={40} />
-                        <p className="text-white font-bold text-lg">Drop files to Stage</p>
-                    </label>
-                ) : (
-                    <div className="text-center">
-                        <FileText className="mx-auto text-neon-green mb-4" size={48} />
-                        <p className="text-xl font-bold text-white mb-2">{fileToUpload.name}</p>
-                        <div className="flex justify-center gap-4 mt-8">
-                            <button onClick={resetUpload} className="px-6 py-2 border border-gray-600 text-gray-400 rounded hover:text-white">Cancel</button>
-                            <button onClick={startEncryption} className="px-6 py-2 bg-neon-green text-black font-bold rounded hover:bg-white transition flex items-center gap-2"><Play size={16} fill="black" /> Engage</button>
-                        </div>
-                    </div>
+
+                    <button 
+                      onClick={resetUpload} 
+                      className={`mt-2 px-6 py-2 font-bold rounded-lg hover:scale-105 transition ${buttonColor}`}
+                    >
+                      <RefreshCw size={14}/> Encrypt Another
+                    </button>
+                  </div>
                 )}
-            </div>
-            
-            {/* LOGS */}
-            <div className="bg-black border border-gray-800 rounded-xl p-4 flex-1 overflow-hidden flex flex-col">
-                <div className="text-gray-500 text-xs border-b border-gray-800 pb-2 mb-2 flex items-center gap-2"><Terminal size={12} /> CRYPTO_KERNEL_LOGS</div>
-                <div className="overflow-y-auto custom-scrollbar flex-1">
-                    {logs.map((log, i) => <p key={i} className="text-neon-green/80 mb-1 font-mono text-xs">{log}</p>)}
-                </div>
-            </div>
+              </div>
+            ) : !fileToUpload ? (
+              <label className="border-2 border-dashed border-gray-700 rounded-lg h-full flex flex-col items-center justify-center cursor-pointer">
+                <input type="file" onChange={onFileDrop} className="hidden" />
+                <Upload className="mb-3" />
+                Drop files to Stage
+              </label>
+            ) : (
+              <div className="text-center">
+                <FileText className="mx-auto mb-3"/>
+                <p>{fileToUpload.name}</p>
+                <button 
+                  onClick={startEncryption} 
+                  className={`mt-4 px-6 py-2 font-bold rounded-lg hover:scale-105 transition ${buttonColor}`}
+                >
+                  <Play size={14}/> Engage
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* LOGS */}
+          <div className="bg-black border border-gray-800 rounded-xl p-4 flex-1 overflow-y-auto">
+            {logs.map((l, i) => <p key={i} className="text-xs font-mono">{l}</p>)}
+          </div>
+
         </div>
 
-        {/* RIGHT: LIST */}
+        {/* RIGHT */}
         <div className="col-span-1 bg-scifi-panel border border-scifi-border rounded-xl p-4 flex flex-col">
-             <h3 className="text-white font-bold text-sm mb-4 flex items-center gap-2"><Server size={16} className="text-neon-blue"/> Vault Contents</h3>
-             <div className="overflow-y-auto custom-scrollbar flex-1 space-y-2">
-                {files.map(file => (
-                    <div key={file.id} onClick={() => setSelectedFile(file)} className="p-3 rounded border border-transparent bg-white/5 hover:border-neon-blue cursor-pointer transition group">
-                        <div className="flex justify-between items-start">
-                            <p className="text-xs text-white font-bold truncate w-32">{file.filename}</p>
-                            <span className={`text-[9px] px-1 rounded font-bold uppercase ${file.mode === 'hybrid' ? 'text-neon-green bg-neon-green/10' : 'text-neon-purple bg-neon-purple/10'}`}>{file.mode === 'hybrid' ? 'PQC' : 'RSA'}</span>
-                        </div>
-                        <p className="text-[10px] text-gray-500 mt-1">{new Date(file.date).toLocaleDateString()}</p>
-                    </div>
-                ))}
-            </div>
+          <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
+            <Server size={14}/> Vault Contents
+          </h3>
+
+          <div className="overflow-y-auto flex-1 space-y-2">
+            {files.map(file => (
+              <div key={file.id} onClick={() => setSelectedFile(file)} className="p-2 bg-white/5 rounded cursor-pointer">
+                <p className="text-xs font-bold truncate">{file.filename}</p>
+                <p className={`text-[10px] ${file.mode === 'hybrid' ? 'text-neon-green' : 'text-purple-400'}`}>
+                  {file.mode}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
+
       </div>
     </div>
   );
 };
+
+const Tab = ({ id, active, set }) => (
+  <button
+    onClick={() => set(id)}
+    className={`px-3 py-1 rounded capitalize ${active === id ? "bg-neon-blue text-black" : "bg-white/10 text-gray-400"}`}
+  >
+    {id}
+  </button>
+);
+
+const Metric = ({ label, value }) => (
+  <div className="bg-black/40 border border-gray-800 p-3 rounded flex justify-between">
+    <span className="text-gray-400">{label}</span>
+    <span className="text-neon-green">{value}</span>
+  </div>
+);
 
 export default Dashboard;
