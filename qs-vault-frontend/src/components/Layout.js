@@ -8,7 +8,7 @@ const Layout = ({ children }) => {
       <Sidebar />
       
       {/* Main Scrollable Content Area */}
-      <div className="flex-1 overflow-auto custom-scrollbar relative">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar relative">
         {/* Optional: A subtle grid background for sci-fi effect */}
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 pointer-events-none"></div>
         

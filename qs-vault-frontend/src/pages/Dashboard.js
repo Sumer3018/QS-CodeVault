@@ -164,8 +164,17 @@ const Dashboard = () => {
               return (
                 <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                   <Metric label="File Size" value={(p1.size_bytes || 0) + " B"} />
-                  <Metric label="Read" value={p1.read_ms != null ? p1.read_ms.toFixed(2) + " ms" : "N/A"}
-                   />
+                  <Metric
+                    label="Read"
+                    value={
+                      p1.read_ms == null
+                        ? "N/A"
+                        : p1.read_ms < 0.01
+                        ? "<0.01 ms"
+                        : `${p1.read_ms.toFixed(2)} ms`
+                    }
+                  />
+
                   <Metric label="Encapsulation" value={(p2.encap_us || 0) + " us"} />
                   <Metric label="HKDF" value={(p3.hkdf_us || 0) + " us"} />
                   <Metric label="AES" value={(p4.aes_enc_ms || 0).toFixed(2) + " ms"} />
