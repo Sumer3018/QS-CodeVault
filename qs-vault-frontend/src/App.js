@@ -12,6 +12,8 @@ import Performance from './pages/Performance';
 import ThreatModel from './pages/ThreatModel';
 import CloudStorage from './pages/CloudStorage';
 import Benchmark from './pages/Benchmark';
+import ThreatLab from './pages/ThreatLab';
+
 
 
 function App() {
@@ -105,6 +107,15 @@ function App() {
       </ProtectedRoute>
     } 
   />
+  <Route
+    path="/threat-lab"
+    element={
+      <ProtectedRoute>
+        <ThreatLab />
+      </ProtectedRoute>
+    }
+  />
+
 
 </Routes>
 

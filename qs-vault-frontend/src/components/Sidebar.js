@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { ShieldCheck, Activity, AlertTriangle, Database, LogOut } from 'lucide-react';
+import { ShieldCheck, Activity, AlertTriangle, Database, LogOut, ShieldAlert } from 'lucide-react';
 import { supabase } from '../services/supabase'; // ✅ This import is correct
 
 const Sidebar = () => {
@@ -32,6 +32,7 @@ const Sidebar = () => {
         <NavItem to="/performance" icon={<Activity size={18} />} label="Performance Monitor" />
         <NavItem to="/benchmark" icon={<Activity size={18} />} label="Benchmark Lab" />
         <NavItem to="/cloud" icon={<Database size={18} />} label="Cloud Storage" />
+        <NavItem to="/threat-lab" icon={<ShieldAlert size={18} />} label="Threat Lab" />
       </nav>
 
 

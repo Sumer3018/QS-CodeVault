@@ -18,14 +18,24 @@ const Performance = () => {
   const [files, setFiles] = useState([]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await getFiles();
-        setFiles(res.data || []);
-      } catch {}
-    };
-    load();
-  }, []);
+  let mounted = true;
+
+  const load = async () => {
+    try {
+      const res = await getFiles();
+      if (mounted) setFiles(res.data || []);
+    } catch (err) {
+      if (err.name !== "CanceledError") console.error(err);
+    }
+  };
+
+  load();
+
+  return () => {
+    mounted = false;
+  };
+}, []);
+
 
   const getTotal = (f) => f?.metrics?.total_ms ?? f?.metrics?.total ?? 0;
 
