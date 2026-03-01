@@ -121,9 +121,36 @@ const Performance = () => {
                 legend: { labels: { color: '#fff' } }
               },
               scales: {
-                y: { grid: { color: '#222' } },
-                x: { grid: { display: false } }
-              }
+      x: {
+        title: {
+          display: true,
+          text: 'Encrypted Files',
+          color: '#aaa',
+          font: { size: 12 }
+        },
+        ticks: {
+          color: '#888',
+        },
+        grid: {
+          display: false
+        }
+      },
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Encryption Latency (ms)',
+          color: '#aaa',
+          font: { size: 12 }
+        },
+        ticks: {
+          color: '#888'
+        },
+        grid: {
+          color: '#222'
+        }
+      }
+    }
             }}
           />
         </div>
