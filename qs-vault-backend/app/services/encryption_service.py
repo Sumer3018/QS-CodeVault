@@ -5,7 +5,7 @@ import base64
 from app.crypto.pqc_kem import PQCLayer
 from app.crypto.kdf import derive_aes_key
 from app.crypto.aes_gcm import AESLayer
-from app.core.server_keys import SERVER_PUBLIC_KEY, SERVER_SECRET_KEY
+from app.core.server_keys import SERVER_KEYS
 
 logger = logging.getLogger("uvicorn")
 
@@ -20,7 +20,7 @@ class EncryptionService:
     # UPLOAD
     # ===============================
     @staticmethod
-    def process_upload(file_bytes: bytes, mode: str = "hybrid"):
+    def process_upload(file_bytes: bytes, mode: str = "hybrid", variant: str = None):
         total_start = time.perf_counter()
 
         metrics = {
@@ -48,7 +48,13 @@ class EncryptionService:
         # PHASE 2 — KEM
         # =============================
         p = time.perf_counter()
-        kem_result = PQCLayer.encapsulate(SERVER_PUBLIC_KEY)
+        if not variant:
+            raise ValueError("ML-KEM variant must be explicitly provided.")
+
+        server_key = SERVER_KEYS[variant]
+
+
+        kem_result = PQCLayer.encapsulate(server_key["pk"], variant)
         metrics["phase_2"]["encap_us"] = (time.perf_counter() - p) * 1e6
         metrics["phase_2"]["ciphertext_size"] = len(kem_result["ciphertext"])
 
@@ -132,13 +138,15 @@ class EncryptionService:
             "aes_tag": len(enc["tag"]),
             "kem_ciphertext": len(kem_result["ciphertext"]),
             "aes_key_size": len(aes_key),
+            "kem_variant": variant or PQCLayer.VARIANT
         }
 
         pqc_cap_safe = base64.b64encode(kem_result["ciphertext"]).decode()
 
         metadata = {
             "pqc_secret_key": None,
-            "pqc_ciphertext_cap": pqc_cap_safe
+            "pqc_ciphertext_cap": pqc_cap_safe,
+            "kem_variant": variant
         }
 
         print("UPLOAD OK | total:", metrics["total_ms"])
@@ -148,7 +156,6 @@ class EncryptionService:
             "metadata": metadata,
             "metrics": metrics
         }
-
 
     # ===============================
     # DOWNLOAD (unchanged)
@@ -169,10 +176,17 @@ class EncryptionService:
 
         print("DOWNLOAD CT:", pqc_cap.hex())
 
+        variant = metadata["kem_variant"]
+
+
+        server_key = SERVER_KEYS[variant]
+
         pqc_result = PQCLayer.decapsulate(
             pqc_cap,
-            SERVER_SECRET_KEY
+            server_key["sk"],
+            variant
         )
+        
         print("DOWNLOAD SS:", pqc_result['shared_secret'].hex())
 
         aes_key, _ = derive_aes_key(

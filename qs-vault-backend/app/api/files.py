@@ -1,8 +1,13 @@
 import uuid
 import logging
+import statistics
+import csv
+import io
+from fastapi.responses import StreamingResponse
 from fastapi import APIRouter, UploadFile, File, Form, Header, HTTPException, Response
 from app.core.supabase import supabase_client
 from app.services.encryption_service import EncryptionService
+from fastapi import Form, File, UploadFile, Header
 
 # Setup logging to see errors in the terminal
 logger = logging.getLogger("uvicorn")
@@ -26,10 +31,11 @@ def get_user_from_token(authorization: str):
         raise HTTPException(status_code=401, detail="Authentication Failed")
 
 
-@router.post("/upload")
+@router.post("/files/upload")
 async def upload_file(
     file: UploadFile = File(...),
     mode: str = Form("hybrid"),
+    variant: str = Form("ML-KEM-768"),
     authorization: str = Header(None)
 ):
     user = get_user_from_token(authorization)
@@ -37,7 +43,11 @@ async def upload_file(
     try:
         # 1. Read & Encrypt
         file_bytes = await file.read()
-        res = EncryptionService.process_upload(file_bytes, mode=mode)
+        res = EncryptionService.process_upload(
+            file_bytes,
+            mode=mode,
+            variant=variant
+        )
 
         # 2. Upload to Supabase Storage
         # FIX: Clean filename to remove spaces/special chars which cause 502s
@@ -66,8 +76,11 @@ async def upload_file(
             "file_size": len(file_bytes),
             "storage_path": c_path,
             "algo_mode": mode,
-            "pqc_secret_key": res['metadata']['pqc_secret_key'],
+            "pqc_secret_key": None,
             "pqc_ciphertext_cap": res['metadata']['pqc_ciphertext_cap'],
+            "kem_variant": res['metadata']['kem_variant'],   # 🔥 ADD THIS LINE
+            "metrics_json": res['metrics'],
+
 
             # Old summary metrics (keep for compatibility)
             "time_pqc": res['metrics'].get('kem_encap_us', 0) / 1000,
@@ -96,7 +109,7 @@ async def upload_file(
 # Just add "logger.error(str(e))" to their except blocks so you can debug them too.
 
 
-@router.get("/list")
+@router.get("/files/list")
 def list_files(authorization: str = Header(None)):
     get_user_from_token(authorization)
     response = supabase_client.table("files").select(
@@ -117,7 +130,7 @@ def list_files(authorization: str = Header(None)):
 
 # In app/api/files.py
 
-@router.get("/download/decrypted/{file_id}")
+@router.get("/files/download/decrypted/{file_id}")
 def download_file(file_id: str, authorization: str = Header(None)):
     get_user_from_token(authorization)
 
@@ -137,8 +150,11 @@ def download_file(file_id: str, authorization: str = Header(None)):
         # 3. Download & Decrypt
         file_blob = supabase_client.storage.from_(
             "encrypted_vault").download(f['storage_path'])
-        meta = {"pqc_secret_key": f['pqc_secret_key'],
-                "pqc_ciphertext_cap": f['pqc_ciphertext_cap']}
+        meta = {
+            "pqc_secret_key": None,
+            "pqc_ciphertext_cap": f['pqc_ciphertext_cap'],
+            "kem_variant": f['kem_variant']   # 🔥 ADD THIS
+        }
 
         plain = EncryptionService.process_download(
             file_blob, meta, mode="hybrid")
@@ -155,7 +171,7 @@ def download_file(file_id: str, authorization: str = Header(None)):
         raise HTTPException(403, "Integrity Check Failed")
 
 
-@router.delete("/delete/{file_id}")
+@router.delete("/files/delete/{file_id}")
 def delete_file(file_id: str, authorization: str = Header(None)):
     get_user_from_token(authorization)
 
@@ -187,7 +203,7 @@ def delete_file(file_id: str, authorization: str = Header(None)):
         return {"status": "error_handled"}
 
 
-@router.get("/inspect/{file_id}")
+@router.get("/files/inspect/{file_id}")
 def inspect_file(file_id: str, authorization: str = Header(None)):
     get_user_from_token(authorization)
     f = supabase_client.table("files").select(
@@ -197,7 +213,7 @@ def inspect_file(file_id: str, authorization: str = Header(None)):
     return {"filename": f['filename'], "cloud_path": f['storage_path'], "hex_preview": blob[:64].hex().upper(), "size": f['file_size']}
 
 
-@router.get("/download/encrypted/{file_id}")
+@router.get("/files/download/encrypted/{file_id}")
 def download_encrypted(file_id: str, authorization: str = Header(None)):
     get_user_from_token(authorization)
 
@@ -217,5 +233,79 @@ def download_encrypted(file_id: str, authorization: str = Header(None)):
         media_type="application/octet-stream",
         headers={
             "Content-Disposition": f'attachment; filename="{f["filename"]}.enc"'
+        }
+    )
+
+
+@router.get("/files/performance/export")
+def export_performance_dataset(authorization: str = Header(None)):
+    get_user_from_token(authorization)
+
+    resp = supabase_client.table("files").select("*").execute()
+
+    # Organize by variant
+    grouped = {}
+
+    for f in resp.data:
+        variant = f.get("algo_mode", "unknown")
+        metrics = f.get("metrics_json", {})
+        total = metrics.get("total_ms")
+
+        if total is None:
+            continue
+
+        grouped.setdefault(variant, []).append(total)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "variant",
+        "runs",
+        "mean_ms",
+        "median_ms",
+        "std_dev",
+        "variance",
+        "min_ms",
+        "max_ms",
+        "ci_95_low",
+        "ci_95_high"
+    ])
+
+    for variant, values in grouped.items():
+        if len(values) < 2:
+            continue
+
+        mean = statistics.mean(values)
+        median = statistics.median(values)
+        std = statistics.stdev(values)
+        var = statistics.variance(values)
+        min_v = min(values)
+        max_v = max(values)
+
+        ci_margin = 1.96 * (std / (len(values) ** 0.5))
+        ci_low = mean - ci_margin
+        ci_high = mean + ci_margin
+
+        writer.writerow([
+            variant,
+            len(values),
+            round(mean, 4),
+            round(median, 4),
+            round(std, 4),
+            round(var, 4),
+            round(min_v, 4),
+            round(max_v, 4),
+            round(ci_low, 4),
+            round(ci_high, 4),
+        ])
+
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=performance_dataset.csv"
         }
     )

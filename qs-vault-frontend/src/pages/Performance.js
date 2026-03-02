@@ -81,7 +81,90 @@ const Performance = () => {
   const avgRsa = rsa.length
     ? (rsa.reduce((a, f) => a + getTotal(f), 0) / rsa.length).toFixed(2)
     : "0.00";
+  
+    // ================= ML-KEM VARIANT AGGREGATION =================
+const pqcFiles = files.filter(f => f.mode === 'hybrid');
 
+const kem512 = pqcFiles.filter(
+  f => f.metrics?.structural?.kem_variant === "ML-KEM-512"
+);
+
+const kem768 = pqcFiles.filter(
+  f => f.metrics?.structural?.kem_variant === "ML-KEM-768"
+);
+
+const kem1024 = pqcFiles.filter(
+  f => f.metrics?.structural?.kem_variant === "ML-KEM-1024"
+);
+
+const sizeLabels = [...new Set(
+  pqcFiles.map(f => f.metrics?.phase_1?.size_bytes)
+)].filter(Boolean).sort((a, b) => a - b);
+
+const aggregateBySize = (arr) => {
+  return sizeLabels.map(size => {
+    const subset = arr.filter(
+      f => f.metrics?.phase_1?.size_bytes === size
+    );
+    if (!subset.length) return null;
+    return subset.reduce((a, f) => a + getTotal(f), 0) / subset.length;
+  });
+};
+
+const kemComparisonData = {
+  labels: sizeLabels.map(s => `${(s/1024).toFixed(0)} KB`),
+  datasets: [
+    {
+      label: "ML-KEM-512",
+      data: aggregateBySize(kem512),
+      borderColor: "#00ff9d",
+      backgroundColor: "#00ff9d",
+      tension: 0.4,
+      borderWidth: 2
+    },
+    {
+      label: "ML-KEM-768",
+      data: aggregateBySize(kem768),
+      borderColor: "#ffa500",
+      backgroundColor: "#ffa500",
+      tension: 0.4,
+      borderWidth: 2
+    },
+    {
+      label: "ML-KEM-1024",
+      data: aggregateBySize(kem1024),
+      borderColor: "#ff3b3b",
+      backgroundColor: "#ff3b3b",
+      tension: 0.4,
+      borderWidth: 2
+    }
+  ]
+};
+    // ================= EXPORT DATASET =================
+const exportDataset = async () => {
+  try {
+    const token = localStorage.getItem("supabase.auth.token");
+
+    const response = await fetch(
+      "http://localhost:8000/api/v1/files/performance/export",
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "qs_vault_performance_dataset.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (err) {
+    console.error("Dataset export failed:", err);
+  }
+};
   return (
     <div className="p-8 flex-1 min-h-0 space-y-6 overflow-y-auto custom-scrollbar">
 
@@ -97,6 +180,12 @@ const Performance = () => {
         <div className="text-right">
           <span className="text-xs text-gray-500 uppercase">Total Files</span>
           <p className="text-2xl font-mono text-white">{files.length}</p>
+          <button
+  onClick={exportDataset}
+  className="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs"
+>
+  Export Dataset (CSV)
+</button>
         </div>
       </div>
 
@@ -156,6 +245,47 @@ const Performance = () => {
         </div>
       </div>
 
+      {/* ML-KEM VARIANT COMPARISON */}
+<div className="bg-scifi-panel border border-scifi-border p-6 rounded-xl">
+  <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-6 flex items-center gap-2">
+    <Activity size={16} /> ML-KEM Variant Comparison (Mean Latency)
+  </h3>
+
+  <div className="h-80">
+    <Line
+      data={kemComparisonData}
+      options={{
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#fff' } }
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'File Size',
+              color: '#aaa'
+            },
+            ticks: { color: '#888' },
+            grid: { display: false }
+          },
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Mean Encryption Latency (ms)',
+              color: '#aaa'
+            },
+            ticks: { color: '#888' },
+            grid: { color: '#222' }
+          }
+        }
+      }}
+    />
+  </div>
+</div>
+
       {/* AVERAGES */}
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-3 text-[10px] text-gray-600 mt-2">
@@ -184,7 +314,8 @@ const Performance = () => {
           const e = m.efficiency || {};
           const x = m.expansion || {};
           const s = m.structural || {};
-
+          
+          
           return (
             <div key={file.id} className="bg-black/40 border border-gray-800 p-4 rounded">
               <div className="flex justify-between mb-3">

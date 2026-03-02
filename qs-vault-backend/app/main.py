@@ -20,7 +20,7 @@ app.add_middleware(
 
 # --- ROUTERS ---
 # We only need the files router. Login/Register is now handled by Supabase in React.
-app.include_router(files.router, prefix="/api/v1/files", tags=["Files"])
+app.include_router(files.router, prefix="/api/v1", tags=["Files"])
 app.include_router(threats.router)
 
 @app.get("/")

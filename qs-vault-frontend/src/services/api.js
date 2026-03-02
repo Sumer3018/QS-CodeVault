@@ -1,52 +1,42 @@
 import axios from 'axios';
 import { supabase } from './supabase';
 
-// Create Axios instance pointing to your FastAPI backend
+// Axios instance
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api/v1', 
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: 'http://127.0.0.1:8000/api/v1'
 });
 
-// --- CRITICAL CHANGE: SUPABASE INTERCEPTOR ---
-// Before every request, ask Supabase for the current user's session token.
+// Supabase JWT interceptor
 api.interceptors.request.use(async (config) => {
   const { data } = await supabase.auth.getSession();
 
-  if (!data?.session) {
-    console.warn("User not logged in");
-    return config;
+  if (data?.session) {
+    config.headers.Authorization = `Bearer ${data.session.access_token}`;
   }
 
-  config.headers.Authorization = `Bearer ${data.session.access_token}`;
   return config;
 });
 
+// ================= FILE SERVICES =================
 
-// --- AUTH SERVICES ---
-// (Deleted. The Frontend now calls supabase.auth directly in Login.js)
-
-// --- FILE SERVICES ---
-export const uploadFile = async (file, mode = 'hybrid') => {
+export const uploadFile = (file, mode, variant) => {
   const formData = new FormData();
-  formData.append('file', file);
-  formData.append('mode', mode); 
-  
-  return api.post('/files/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  formData.append("file", file);
+  formData.append("mode", mode);
+  formData.append("variant", variant);
+
+  return api.post("/files/upload", formData);  // ← IMPORTANT leading slash
 };
 
-export const deleteFile = async (fileId) => {
+export const deleteFile = (fileId) => {
   return api.delete(`/files/delete/${fileId}`);
 };
 
-export const getFiles = async () => {
+export const getFiles = () => {
   return api.get('/files/list');
 };
 
-export const inspectFile = async (fileId) => {
+export const inspectFile = (fileId) => {
   return api.get(`/files/inspect/${fileId}`);
 };
 
@@ -61,11 +51,9 @@ export const downloadEncryptedFile = async (fileId, filename) => {
   link.setAttribute('download', filename + ".enc");
   document.body.appendChild(link);
   link.click();
-
   link.remove();
   window.URL.revokeObjectURL(url);
 };
-
 
 export const downloadDecryptedFile = async (fileId, filename) => {
   const response = await api.get(`/files/download/decrypted/${fileId}`, {
@@ -78,10 +66,8 @@ export const downloadDecryptedFile = async (fileId, filename) => {
   link.setAttribute('download', filename);
   document.body.appendChild(link);
   link.click();
-
   link.remove();
   window.URL.revokeObjectURL(url);
 };
-
 
 export default api;

@@ -18,6 +18,7 @@ const Dashboard = () => {
   const [successMode, setSuccessMode] = useState(false);
   const [customAlert, setCustomAlert] = useState(null);
   const [cryptoMode, setCryptoMode] = useState('hybrid');
+  const [variant, setVariant] = useState("ML-KEM-768");
   const [activeTab, setActiveTab] = useState("overview");
 
   // ================= THEME =================
@@ -72,7 +73,7 @@ const Dashboard = () => {
     setTimeout(() => { setUploadStep(4); addLog("KDF: Deriving Key..."); }, 3000);
 
     try {
-      const res = await uploadFile(fileToUpload, cryptoMode);
+      const res = await uploadFile(fileToUpload, cryptoMode, variant);
       setTimeout(() => { setUploadStep(5); addLog("AES: Encrypting..."); }, 4000);
       setTimeout(() => {
         setSuccessMode(true);
@@ -224,20 +225,36 @@ const Dashboard = () => {
         </div>
 
         <div className="flex gap-4">
-          <select
-            value={cryptoMode}
-            onChange={(e) => setCryptoMode(e.target.value)}
-            className={`bg-black border ${borderColor} ${primaryColor} text-xs p-2 rounded`}
-          >
-            <option value="hybrid">Hybrid PQC</option>
-            <option value="rsa">RSA-2048</option>
-          </select>
 
-          <div className="flex items-center gap-2 border border-neon-green/30 bg-neon-green/5 text-xs p-2 rounded text-neon-green">
-            <HardDrive size={14}/>
-            <span className="font-bold">MinIO Cloud Storage</span>
-          </div>
-        </div>
+  {/* Crypto Mode */}
+  <select
+    value={cryptoMode}
+    onChange={(e) => setCryptoMode(e.target.value)}
+    className={`bg-black border ${borderColor} ${primaryColor} text-xs p-2 rounded`}
+  >
+    <option value="hybrid">Hybrid PQC</option>
+    <option value="rsa">RSA-2048</option>
+  </select>
+
+  {/* Variant Selector (ONLY for Hybrid) */}
+  {cryptoMode === "hybrid" && (
+    <select
+      value={variant}
+      onChange={(e) => setVariant(e.target.value)}
+      className="bg-black border border-neon-green text-neon-green text-xs p-2 rounded"
+    >
+      <option value="ML-KEM-512">ML-KEM-512</option>
+      <option value="ML-KEM-768">ML-KEM-768</option>
+      <option value="ML-KEM-1024">ML-KEM-1024</option>
+    </select>
+  )}
+
+  <div className="flex items-center gap-2 border border-neon-green/30 bg-neon-green/5 text-xs p-2 rounded text-neon-green">
+    <HardDrive size={14}/>
+    <span className="font-bold">MinIO Cloud Storage</span>
+  </div>
+
+</div>
       </div>
 
       {/* MAIN */}
