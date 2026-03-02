@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getFiles } from '../services/api';
 import { Line } from 'react-chartjs-2';
 import { Activity } from 'lucide-react';
+import api from '../services/api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -112,15 +113,16 @@ const aggregateBySize = (arr) => {
 };
 
 const kemComparisonData = {
-  labels: sizeLabels.map(s => `${(s/1024).toFixed(0)} KB`),
+  labels,
   datasets: [
     {
       label: "ML-KEM-512",
       data: aggregateBySize(kem512),
-      borderColor: "#00ff9d",
-      backgroundColor: "#00ff9d",
+      borderColor: "#00d5ff",
+      backgroundColor: "#00d5ff",
       tension: 0.4,
-      borderWidth: 2
+      borderWidth: 2,
+      spanGaps: true
     },
     {
       label: "ML-KEM-768",
@@ -128,7 +130,8 @@ const kemComparisonData = {
       borderColor: "#ffa500",
       backgroundColor: "#ffa500",
       tension: 0.4,
-      borderWidth: 2
+      borderWidth: 2,
+      spanGaps: true
     },
     {
       label: "ML-KEM-1024",
@@ -136,25 +139,19 @@ const kemComparisonData = {
       borderColor: "#ff3b3b",
       backgroundColor: "#ff3b3b",
       tension: 0.4,
-      borderWidth: 2
+      borderWidth: 2,
+      spanGaps: true
     }
   ]
 };
     // ================= EXPORT DATASET =================
 const exportDataset = async () => {
   try {
-    const token = localStorage.getItem("supabase.auth.token");
+    const response = await api.get("/files/performance/export", {
+      responseType: "blob"
+    });
 
-    const response = await fetch(
-      "http://localhost:8000/api/v1/files/performance/export",
-      {
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    );
-
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-
+    const url = window.URL.createObjectURL(new Blob([response.data]));
     const a = document.createElement("a");
     a.href = url;
     a.download = "qs_vault_performance_dataset.csv";
@@ -165,6 +162,7 @@ const exportDataset = async () => {
     console.error("Dataset export failed:", err);
   }
 };
+
   return (
     <div className="p-8 flex-1 min-h-0 space-y-6 overflow-y-auto custom-scrollbar">
 
