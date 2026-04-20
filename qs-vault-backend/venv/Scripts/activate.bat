@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=D:\Sem 8\Project\QS-CodeVault\qs-vault-backend\venv
+set VIRTUAL_ENV=D:\Sem8\Project\QS-CodeVault\qs-vault-backend\venv
 
 if not defined PROMPT set PROMPT=$P$G
 

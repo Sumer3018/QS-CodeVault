@@ -1,0 +1,23 @@
+# 🔐 Env files (CRITICAL)
+.env
+.env.*
+!.env.example
+qs-vault-backend/.env
+qs-vault-frontend/.env
+
+# 🐍 Python
+__pycache__/
+*.pyc
+venv/
+
+# ⚛️ React / Node
+node_modules/
+build/
+dist/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

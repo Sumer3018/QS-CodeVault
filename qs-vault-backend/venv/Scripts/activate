@@ -35,7 +35,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="D:\Sem 8\Project\QS-CodeVault\qs-vault-backend\venv"
+VIRTUAL_ENV="D:\Sem8\Project\QS-CodeVault\qs-vault-backend\venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
